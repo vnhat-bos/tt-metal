@@ -200,7 +200,7 @@ def load_embed_dict(path: str):
 @pytest.fixture(scope="session")
 def device():
     """Open a TT device once per session, enable persistent kernel cache, close on teardown."""
-    dev = device_box.open({"device_id": 0, "l1_small_size": 29 * 1024}, enable_program_cache=True)
+    dev = device_box.open({"device_id": 0, "l1_small_size": 29 * 1024, "trace_region_size": 1718272}, enable_program_cache=True)
     yield dev
     device_box.close()
 
