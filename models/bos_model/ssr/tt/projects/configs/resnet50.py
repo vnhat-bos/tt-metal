@@ -657,11 +657,11 @@ module_config = {
                     "in_place": False,
                     "reshard_if_not_optimal": False,
                     "override_sharding_config": True,
-                    "shard_layout": ttnn.TensorMemoryLayout.HEIGHT_SHARDED,
+                    "shard_layout": ttnn.TensorMemoryLayout.BLOCK_SHARDED,
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -686,10 +686,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -711,10 +711,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -744,10 +744,10 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 4)
                             ),
                         ]),
-                        "transpose_shards": True,
+                        "transpose_shards": False,
                         "output_layout": ttnn.Layout.TILE,
                         "enable_act_double_buffer": True,
                         "force_split_reader": False,
@@ -1159,10 +1159,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": True,
@@ -1184,10 +1184,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": False,
                     "force_split_reader": False,
@@ -1209,10 +1209,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1235,10 +1235,10 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 4)
                             ),
                         ]),
-                        "transpose_shards": True,
+                        "transpose_shards": False,
                         "output_layout": ttnn.Layout.TILE,
                         "enable_act_double_buffer": True,
                         "force_split_reader": False,
@@ -1263,10 +1263,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1288,10 +1288,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1313,10 +1313,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1340,10 +1340,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1365,10 +1365,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
@@ -1390,10 +1390,10 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
-                    "transpose_shards": True,
+                    "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
