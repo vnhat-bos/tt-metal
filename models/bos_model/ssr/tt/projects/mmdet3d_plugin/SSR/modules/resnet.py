@@ -1,4 +1,5 @@
 from typing import Optional, Type, Union
+from tt.projects.mmdet3d_plugin.SSR.utils.misc import setup_l1_sharded_config
 
 import torch
 from bos_metal import ttnn
@@ -416,33 +417,17 @@ class ResNet(BaseModule):
                 child.reallocate_weights_and_bias()
 
     def prepare_persistent_l1_spec(self, tensor):
-        temp_tensor = torch.randn(tuple(tensor.shape))
-        temp_tensor = ttnn.from_torch(
-            temp_tensor,
-            dtype=tensor.dtype,
-            layout=tensor.layout,
-        )
-        temp_tensor = ttnn.pad(
-            temp_tensor,
-            [tensor.padded_shape[0], tensor.padded_shape[1], tensor.padded_shape[2], L1_ALIGNMENT],
-            [0, 0, 0, 0],
-            0,
-        )
-        temp_tensor = ttnn.to_device(temp_tensor, self.device)
-        self.sharded_l1_mem_config = ttnn.create_sharded_memory_config(
-            (12288, L1_ALIGNMENT),
-            core_grid=ttnn.CoreRangeSet([ttnn.CoreRange(ttnn.CoreCoord(0, 0), ttnn.CoreCoord(4, 3))]),
-            strategy=ttnn.ShardStrategy.HEIGHT,
-            orientation=ttnn.ShardOrientation.ROW_MAJOR,
-            use_height_and_width_as_shard_shape=True,
-        )
+        # Memory config
+        self.sharded_l1_mem_config = setup_l1_sharded_config(tensor, device=self.device)
+        tensor = ttnn.bos_reshard(tensor, self.sharded_l1_mem_config)
 
-        temp_tensor = ttnn.to_memory_config(
-            temp_tensor,
-            self.sharded_l1_mem_config,
-        )
+        # Reallocate to avoid fragmentation
         temp_tensor = ttnn.reallocate(temp_tensor)
+
+        # Record spec
         self.persistent_l1_spec = temp_tensor.spec
+
+        # Deallocate temp tensor
         ttnn.deallocate(temp_tensor)
 
     def forward(self, x):

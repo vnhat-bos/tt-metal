@@ -420,10 +420,8 @@ class ResNet(BaseModule):
     def prepare_persistent_l1_spec(self, tensor):
         # Memory config
         self.sharded_l1_mem_config = setup_l1_sharded_config(tensor, device=self.device)
-        temp_tensor = ttnn.to_memory_config(
-            tensor,
-            self.sharded_l1_mem_config,
-        )
+        temp_tensor = ttnn.bos_reshard(tensor, self.sharded_l1_mem_config)
+
         # Reallocate to avoid fragmentation
         temp_tensor = ttnn.reallocate(temp_tensor)
 
