@@ -116,12 +116,15 @@ def test_fpn(device):
         for tensor in ttnn_input_tensor
     ]
 
+    import tracy
+    tracy.signpost("fpn")
     # Warmup runs
     ttnn_output_tensor = ttnn_fpn(ttnn_input_tensor)
     for i in range(len(ttnn_output_tensor)):
         temp_out = ttnn.to_torch(ttnn_output_tensor[i])
         ttnn.deallocate(ttnn_output_tensor[i])
         del temp_out
+    breakpoint()
 
     # I don't know why input tensor is deallocated here, so re-create it
     ttnn_input_tensor = [torch.permute(tensor, (0, 2, 3, 1)) for tensor in torch_input_tensor]

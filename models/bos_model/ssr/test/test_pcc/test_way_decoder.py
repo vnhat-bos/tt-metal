@@ -111,7 +111,10 @@ def test_way_decoder_equivalence(device):
 
     # Forward passes
     ref_out = ref_model(**ref_input).permute(1, 0, 2)
+    import tracy
+    tracy.signpost("way_decoder")
     out = model(**input)
+    breakpoint()
     
     # Assertions
     assert ref_out.shape == out.shape, "Output shapes do not match"

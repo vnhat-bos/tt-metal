@@ -47,7 +47,10 @@ def run_with_pcc(device):
     )
     tokenlearner_tt.load_state_dict(state_dict)
     ref_out, ref_selected = tokenlearner_torch(ref_x)
+    import tracy
+    tracy.signpost("tokenlearner")
     out = tokenlearner_tt(x, memory_config=memory_config['SSRHead']['tokenlearner'], program_config=program_config['SSRHead']['tokenlearner'])
+    breakpoint()
     compare_tensors(ref_out, out)
 
 

@@ -67,7 +67,10 @@ def test_tokenlearner_layer_equivalence(device, program_memory_config):
     tokenlearner_ttnn.load_state_dict(state_dict)
     ref_out, ref_selected = tokenlearner_torch(ref_x)
 
+    import tracy
+    tracy.signpost("tokenlearner")
     out = tokenlearner_ttnn(x, memory_config=memory_config, program_config=program_config)
+    breakpoint()
 
     # TOTAL timer for this pass
 

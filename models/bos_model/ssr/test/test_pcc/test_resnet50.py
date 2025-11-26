@@ -286,6 +286,7 @@ def test_resnet_backbone_pcc(device):
     )
     # First run to compile the model
     tt_out = tt_model(data_tt["img"][0])[-1]
+    breakpoint()
     ttnn.synchronize_device(device)
 
     # --------------------- Assertions ------------------------------------- #

@@ -86,7 +86,10 @@ def run_with_pcc(device):
 
     x = ttnn.to_memory_config(x, memory_config=memory_config_x)
     x = ttnn.unsqueeze(x, 0)
+    import tracy
+    tracy.signpost("se_layer")
     out = model(x, x_se, memory_config=memory_config, program_config=program_config)
+    breakpoint()
     ttnn.synchronize_device(device)
     compare_tensors(ref_out, out)
     assert compare_tensors(ref_out, out)

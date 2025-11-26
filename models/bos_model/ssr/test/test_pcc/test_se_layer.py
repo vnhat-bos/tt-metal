@@ -68,7 +68,10 @@ def test_se_layer_equivalence(device):
 
     # Forward passes
     ref_out = ref_model(ref_x, ref_x_se)
+    import tracy
+    tracy.signpost("se_layer")
     out = model(x, x_se)
+    breakpoint()
     
     # Assertions
     assert ref_out.shape == out.shape, "Output shapes do not match"
