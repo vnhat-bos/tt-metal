@@ -82,6 +82,12 @@ class Add(BaseModule):
         b = ttnn.to_layout(b, layout=ttnn.Layout.TILE) if b.layout != ttnn.Layout.TILE else b
 
         # Perform addition
+        if b.memory_config() != a.memory_config():
+            if a.is_sharded() and b.is_sharded():
+                a = ttnn.bos_reshard(a, b.memory_config())
+            else:
+                a = ttnn.to_memory_config(a, memory_config=b.memory_config())
+            a = ttnn.reallocate(a)
         a = self.add(a, b, activations=activations)
 
         # Deallocate identity
@@ -434,13 +440,10 @@ class ResNet(BaseModule):
     def forward(self, x):
         """Forward function."""
         if self.first_run:
-            # Original tensor is splitted into 6 sub-tensor corresponding to 6 images.
-            # Then, those images are sequentially forwarded through the network until layer3.0 (After finish layer3.0).
-            self.reset_batch_size(batch_size=1, modules=["conv1", "layer1", "layer2", "layer3.0"])
-            # After concatenating two sub-tensors into a single tensor, it will be forwarded through the network until the end of the model.
-            self.reset_batch_size(
-                batch_size=2, modules=["layer3.1", "layer3.2", "layer3.3", "layer3.4", "layer3.5", "layer4"]
-            )
+            # Original tensor is splitted into 2 sub-tensors with 3 images each
+            # Then, those patches are sequentially forwarded through the network until layer3.0 (After finish layer3.0).
+            self.reset_batch_size(batch_size=3, modules=["conv1", "layer1", "layer2", "layer3.0"])
+            # After concatenating two patches into a single tensor, it will be forwarded through the network until the end of the model.
 
         # Prepare a spec of a persistent l1 memory (For trace mode)
         if self.first_run:
