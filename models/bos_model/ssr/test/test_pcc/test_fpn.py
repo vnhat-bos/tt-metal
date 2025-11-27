@@ -7,6 +7,7 @@ import torch
 from bos_metal import compare_tensors, device_box, engine, op, ttnn
 from mmdet.models.builder import BACKBONES, build_backbone
 from tt.projects.configs import fpn
+from test.SSR.tt.utils.misc import setup_dram_sharded_config, setup_l1_sharded_config
 
 
 # --------------------------------------------------------------------------- #
@@ -111,15 +112,31 @@ def test_fpn(device):
 
     ## 4.2. TT-NN model
     ttnn_input_tensor = [torch.permute(tensor, (0, 2, 3, 1)) for tensor in torch_input_tensor]
+    ttnn_input_tensor = [torch.reshape(tensor, (1, 1, batch_size * input_height[0] * input_width[0], in_channels[0])) for tensor in ttnn_input_tensor]
     ttnn_input_tensor = [
-        ttnn.from_torch(tensor, dtype=ttnn.bfloat16, layout=ttnn.Layout.TILE, device=device)
+        ttnn.from_torch(tensor, dtype=ttnn.bfloat16, layout=ttnn.Layout.TILE)
         for tensor in ttnn_input_tensor
     ]
 
-    import tracy
-    tracy.signpost("fpn")
+    # Setup sharded memory config
+    shard_shape = (256, in_channels[0]//8)
+    l1_memory_config = ttnn.create_sharded_memory_config(
+        shape=shard_shape,
+        core_grid=ttnn.CoreRangeSet([
+            ttnn.CoreRange(
+                ttnn.CoreCoord(0, 0),
+                ttnn.CoreCoord(7, 5)
+            ),
+        ]),
+        strategy=ttnn.ShardStrategy.BLOCK,
+        orientation=ttnn.ShardOrientation.ROW_MAJOR,
+        use_height_and_width_as_shard_shape=True
+    )
+    ttnn_input_tensor = [tensor.to(device, l1_memory_config) for tensor in ttnn_input_tensor]
+
     # Warmup runs
     ttnn_output_tensor = ttnn_fpn(ttnn_input_tensor)
+    breakpoint()
     for i in range(len(ttnn_output_tensor)):
         temp_out = ttnn.to_torch(ttnn_output_tensor[i])
         ttnn.deallocate(ttnn_output_tensor[i])
@@ -135,9 +152,11 @@ def test_fpn(device):
     # Actual runs
 
     with op.time_profiler():
+        ttnn.synchronize_device(device)
         op.timer.start("ttnn fpn")
         start = time.time()
         ttnn_output_tensor = ttnn_fpn(ttnn_input_tensor)
+        ttnn.synchronize_device(device)
         elapse_time = time.time() - start
         print(f"TT-NN FPN forward pass took {elapse_time:.4f} seconds")
         op.timer.end("ttnn fpn")
