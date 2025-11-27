@@ -6,7 +6,7 @@ module_config = {
             "dtype": ttnn.bfloat16,
             "weights_dtype": ttnn.bfloat8_b,
             "activation": ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-            "act_block_h_override": 32*12,
+            "act_block_h_override": 32*6,
             "deallocate_activation": True,
             "reallocate_halo_output": True,
             "in_place": False,
@@ -16,7 +16,7 @@ module_config = {
             "core_grid": ttnn.CoreRangeSet([
                 ttnn.CoreRange(
                     ttnn.CoreCoord(0, 0),
-                    ttnn.CoreCoord(4, 3)
+                    ttnn.CoreCoord(7, 5)
                 ),
             ]),
             "transpose_shards": False,
@@ -43,7 +43,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -58,7 +58,7 @@ module_config = {
                     "dtype": ttnn.bfloat8_b,
                     "weights_dtype": ttnn.bfloat8_b,
                     "activation": ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                    "act_block_h_override": 32*12,
+                    "act_block_h_override": 32*6,
                     "deallocate_activation": True,
                     "reallocate_halo_output": False,
                     "in_place": False,
@@ -68,7 +68,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -93,7 +93,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -126,7 +126,7 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 5)
                             ),
                         ]),
                         "transpose_shards": False,
@@ -154,7 +154,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -169,7 +169,7 @@ module_config = {
                     "dtype": ttnn.bfloat8_b,
                     "weights_dtype": ttnn.bfloat8_b,
                     "activation": ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                    "act_block_h_override": 32*12,
+                    "act_block_h_override": 32*6,
                     "deallocate_activation": True,
                     "reallocate_halo_output": False,
                     "in_place": False,
@@ -179,7 +179,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -204,7 +204,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -231,7 +231,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -246,7 +246,7 @@ module_config = {
                     "dtype": ttnn.bfloat8_b,
                     "weights_dtype": ttnn.bfloat8_b,
                     "activation": ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                    "act_block_h_override": 32*12,
+                    "act_block_h_override": 32*6,
                     "deallocate_activation": True,
                     "reallocate_halo_output": False,
                     "in_place": False,
@@ -256,7 +256,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -281,7 +281,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -300,7 +300,7 @@ module_config = {
                     "dtype": ttnn.bfloat8_b,
                     "weights_dtype": ttnn.bfloat8_b,
                     "activation": ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
-                    "act_block_h_override": 32*6,
+                    "act_block_h_override": 32*4,
                     "deallocate_activation": True,
                     "reallocate_halo_output": False,
                     "in_place": False,
@@ -310,7 +310,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -335,7 +339,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -360,7 +368,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -383,7 +395,7 @@ module_config = {
                         "dtype": ttnn.bfloat8_b,
                         "weights_dtype": ttnn.bfloat8_b,
                         "activation": None,
-                        "act_block_h_override": 32*3,
+                        "act_block_h_override": 32*2,
                         "deallocate_activation": False,
                         "reallocate_halo_output": False,
                         "in_place": False,
@@ -393,12 +405,12 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 5)
                             ),
                         ]),
                         "transpose_shards": False,
                         "output_layout": ttnn.Layout.TILE,
-                        "enable_act_double_buffer": True,
+                        "enable_act_double_buffer": False,
                         "force_split_reader": True,
                         # "enable_subblock_padding": False,
                     },
@@ -421,7 +433,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -446,7 +462,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -471,7 +491,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -498,7 +522,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -523,7 +547,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -548,7 +572,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -575,7 +599,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -600,7 +624,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -625,7 +649,7 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -661,13 +685,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": False,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": True,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -686,13 +711,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -711,13 +737,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -744,13 +771,14 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 5)
                             ),
                         ]),
                         "transpose_shards": True,
                         "output_layout": ttnn.Layout.TILE,
                         "enable_act_double_buffer": True,
                         "force_split_reader": False,
+                        "full_inner_dim": True,
                         # "enable_subblock_padding": False,
                     },
                 }
@@ -772,7 +800,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -797,7 +829,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -822,7 +858,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -849,7 +889,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -874,7 +918,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -899,7 +947,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -926,7 +978,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -951,7 +1007,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -976,7 +1036,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1003,7 +1067,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1028,7 +1096,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1053,7 +1125,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1080,7 +1156,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1105,7 +1185,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1130,7 +1214,11 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 4)
+                        ),
+                        ttnn.CoreRange(
+                            ttnn.CoreCoord(0, 5),
+                            ttnn.CoreCoord(4, 5)
                         ),
                     ]),
                     "transpose_shards": False,
@@ -1159,13 +1247,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
-                    "force_split_reader": True,
+                    "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1184,13 +1273,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
-                    "enable_act_double_buffer": False,
+                    "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": False,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1209,13 +1299,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1235,13 +1326,14 @@ module_config = {
                         "core_grid": ttnn.CoreRangeSet([
                             ttnn.CoreRange(
                                 ttnn.CoreCoord(0, 0),
-                                ttnn.CoreCoord(4, 3)
+                                ttnn.CoreCoord(7, 5)
                             ),
                         ]),
                         "transpose_shards": True,
                         "output_layout": ttnn.Layout.TILE,
                         "enable_act_double_buffer": True,
                         "force_split_reader": False,
+                        "full_inner_dim": True,
                         # "enable_subblock_padding": False,
                     },
                 }
@@ -1263,13 +1355,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1288,13 +1381,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1313,13 +1407,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1340,13 +1435,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1365,13 +1461,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
@@ -1390,13 +1487,14 @@ module_config = {
                     "core_grid": ttnn.CoreRangeSet([
                         ttnn.CoreRange(
                             ttnn.CoreCoord(0, 0),
-                            ttnn.CoreCoord(4, 3)
+                            ttnn.CoreCoord(7, 5)
                         ),
                     ]),
                     "transpose_shards": True,
                     "output_layout": ttnn.Layout.TILE,
                     "enable_act_double_buffer": True,
                     "force_split_reader": False,
+                    "full_inner_dim": True,
                     # "enable_subblock_padding": False,
                 },
             },
