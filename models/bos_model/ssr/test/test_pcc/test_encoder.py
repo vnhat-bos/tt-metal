@@ -262,11 +262,11 @@ def test_encoder(device):
         "norm": MyDict({}),
         "ffn": MyDict({
             0: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                compute_with_storage_grid_size=(5, 4),
+                compute_with_storage_grid_size=(8, 6),
                 in0_block_w=8,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 20 / 32),
+                per_core_M=math.ceil(BEV_H * BEV_W / 48 / 32),
                 # per_core_M=10,
                 per_core_N=16,
                 fuse_batch=True,
@@ -274,11 +274,11 @@ def test_encoder(device):
                 mcast_in0=False,
             ),
             1: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                compute_with_storage_grid_size=(5, 4),
+                compute_with_storage_grid_size=(8, 6),
                 in0_block_w=16,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 20 / 32),
+                per_core_M=math.ceil(BEV_H * BEV_W / 48 / 32),
                 # per_core_M=10,
                 per_core_N=8,
                 fuse_batch=True,
@@ -289,18 +289,18 @@ def test_encoder(device):
     })
     memory_config = MyDict({
         "bev_query": op.ShardedMemConfig(
-            # shape=(512, 256),
-            shape=(math.ceil(BEV_H * BEV_W / 20 / 32) * 32, 256),
+            # shape=(224, 256),
+            shape=(math.ceil(BEV_H * BEV_W / 48 / 32) * 32, 256),
             # shape=(320, 256),
-            core_grid=(5, 4),
+            core_grid=(8, 6),
             strategy='height',
             as_shard_shape=True
         ),
         "self_attn": MyDict({
             "value": op.ShardedMemConfig(
                 # (640, 256), 
-                (math.ceil(BEV_H * BEV_W / 20 / 32) * 32 * 2, 256),
-                (5, 4), 
+                (math.ceil(BEV_H * BEV_W / 48 / 32) * 32 * 2, 256),
+                (8, 6), 
                 "height", 
                 as_shard_shape=True
             ),
