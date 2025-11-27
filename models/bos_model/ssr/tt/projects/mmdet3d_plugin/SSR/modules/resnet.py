@@ -450,7 +450,7 @@ class ResNet(BaseModule):
 
         # Forward
         temp_tensor = None
-        # Forward 6 sub-tensors sequentially
+        # Forward sub-tensors sequentially
         for i in range(len(x)):
             x_i = ttnn.allocate_tensor_on_device(self.persistent_l1_spec, self.device)
             x_i = ttnn.bos_reshard(x[i], x_i.memory_config(), x_i)
@@ -501,14 +501,7 @@ class ResNet(BaseModule):
                 # ResNet layer 4
                 res_layer = getattr(self, f"layer4")
                 x_i = res_layer(x_i)
-
-                # Concatenate them into a final output tensor
-                x_i = ttnn.to_memory_config(x_i, memory_config=ttnn.DRAM_MEMORY_CONFIG)
-                if i == 1:
-                    out = x_i
-                else:
-                    out = ttnn.concat((out, x_i), dim=2)
-                    ttnn.deallocate(x_i)
+                out = x_i
 
         # On the first run, reallocate Conv2d weights and biases in DRAM to reduce fragmentation
         if self.first_run:
