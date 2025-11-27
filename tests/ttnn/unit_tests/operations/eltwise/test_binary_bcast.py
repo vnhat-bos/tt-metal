@@ -6,6 +6,8 @@ import torch
 import pytest
 import ttnn
 
+TILE_HEIGHT = 32
+
 from tests.ttnn.unit_tests.operations.eltwise.backward.utility_funcs import (
     compare_pcc,
 )
@@ -334,6 +336,76 @@ def test_01_volume_tensors(device, a, b, c_golden, memory_config_a, memory_confi
     c = ttnn.to_torch(ttnn_c).reshape((-1))
 
     assert c.tolist() == c_golden
+
+def _select_height_sharded_core_grid(device, batch_size, height):
+    grid_size = device.compute_with_storage_grid_size()
+    total_height = batch_size * height
+    max_tiles_per_core = max(total_height // TILE_HEIGHT, 1)
+    max_device_cores = grid_size.x * grid_size.y
+    candidate_max = min(max_device_cores, max_tiles_per_core)
+
+    for cores in range(candidate_max, 0, -1):
+        if total_height % cores != 0:
+            continue
+        shard_height = total_height // cores
+        if shard_height % TILE_HEIGHT != 0:
+            continue
+        for y in range(min(grid_size.y, cores), 0, -1):
+            if cores % y != 0:
+                continue
+            x = cores // y
+            if x <= grid_size.x:
+                return ttnn.CoreGrid(y=y, x=x)
+    return ttnn.CoreGrid(y=1, x=1)
+
+
+def _create_height_sharded_mem_config(device, batch, height, width):
+    core_grid = _select_height_sharded_core_grid(device, batch, height)
+    return ttnn.create_sharded_memory_config(
+        (batch, 1, height, width),
+        core_grid=core_grid,
+        strategy=ttnn.ShardStrategy.HEIGHT,
+    )
+
+
+@pytest.mark.parametrize("shape", [(1, 10240, 256), (2, 5120, 256), (4, 2560, 256), (5, 2048, 256)])
+def test_mul_height_sharded_with_interleaved_operand(shape, device):
+    batch, height, width = shape
+    torch.manual_seed(0)
+
+    a_pt = torch.randn((batch, 1, height, width), dtype=torch.bfloat16)
+    b_pt = torch.randn((1, 1, 1, width), dtype=torch.bfloat16)
+
+    height_mem_cfg = _create_height_sharded_mem_config(device, batch, height, width)
+
+    a_tt = ttnn.from_torch(
+        a_pt,
+        dtype=ttnn.bfloat16,
+        device=device,
+        layout=ttnn.TILE_LAYOUT,
+        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+    )
+    a_tt = ttnn.to_memory_config(a_tt, height_mem_cfg)
+
+    b_tt = ttnn.from_torch(
+        b_pt,
+        dtype=ttnn.bfloat16,
+        device=device,
+        layout=ttnn.TILE_LAYOUT,
+        memory_config=ttnn.DRAM_MEMORY_CONFIG,
+    )
+
+    assert b_tt.padded_shape[-2] % TILE_HEIGHT == 0
+    
+    import tracy
+    tracy.signpost("height dram_interleaved")
+    out_tt = ttnn.multiply(a_tt, b_tt, memory_config=height_mem_cfg, use_legacy=True)
+    out_pt = torch.multiply(a_pt, b_pt)
+
+    tracy.signpost("height l1_interleaved")
+    b_tt = ttnn.to_memory_config(b_tt, ttnn.L1_MEMORY_CONFIG)
+    out_tt = ttnn.multiply(a_tt, b_tt, memory_config=height_mem_cfg, use_legacy=True)
+    assert_with_pcc(ttnn.to_torch(out_tt), out_pt)
 
 
 @pytest.mark.parametrize(

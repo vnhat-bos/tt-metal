@@ -7,8 +7,11 @@
 #include "ttnn/operations/data_movement/bcast/bcast.hpp"
 // #include <tt-metalium/work_split.hpp>
 #include <tt-metalium/constants.hpp>
+#include <tt-metalium/core_coord.hpp>
+// #include <tt-metalium/util.hpp>
 #include <tt-metalium/host_api.hpp>
 #include <tt-metalium/tensor_accessor_args.hpp>
+#include <vector>
 // #include "ttnn/device_operation.hpp"
 
 namespace ttnn::operations::binary {
@@ -49,6 +52,26 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
     uint32_t bN = bshape.rank() >= 4 ? bshape[-4] : 1;
     uint32_t NC = N * C;
 
+    auto a_layout = a.memory_config().memory_layout();
+    auto b_layout = b->memory_config().memory_layout();
+    bool a_height_sharded = (a_layout == TensorMemoryLayout::HEIGHT_SHARDED);
+    bool b_interleaved = b_layout == TensorMemoryLayout::INTERLEAVED;
+
+    log_debug(
+        tt::LogOp,
+        "BroadcastHeightMultiCoreShardedOptimized::create - A padded (N={}, C={}, H={}, W={}), layout {}, B padded (N={}, C={}, H={}, W={}), layout {}",
+        N,
+        C,
+        H,
+        ashape[-1],
+        static_cast<int>(a_layout),
+        bN,
+        bshape.rank() >= 3 ? bshape[-3] : 1,
+        bshape[-2],
+        bshape[-1],
+        static_cast<int>(b_layout)
+    );
+
     // uint32_t Wt = W / TILE_WIDTH;
     // uint32_t Ht = H / TILE_HEIGHT;
 
@@ -87,11 +110,11 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
     TT_FATAL(input_tile_size <= shard_size_in_bytes, "Input tile size should be less than shard size");
 
     uint32_t Wt, Ht;
-    if (a.memory_config().memory_layout() == TensorMemoryLayout::BLOCK_SHARDED) {
+    if (a_layout == TensorMemoryLayout::BLOCK_SHARDED) {
         ncores_x = all_cores.ranges().begin()->end_coord.y + 1;
         Wt = shard_spec.shape[1] / TILE_WIDTH;
         Ht = shard_spec.shape[0] / TILE_HEIGHT;
-    } else if (a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
+    } else if (a_layout == TensorMemoryLayout::WIDTH_SHARDED) {
         Wt = shard_spec.shape[1] / TILE_WIDTH;
         Ht = shard_spec.shape[0] / TILE_HEIGHT;
         TT_ASSERT(
@@ -100,6 +123,9 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
             shard_spec.shape[0],
             bN,
             TILE_HEIGHT);
+    } else if (a_height_sharded && b_interleaved) {
+        Wt = shard_spec.shape[1] / TILE_WIDTH;
+        Ht = shard_spec.shape[0] / TILE_HEIGHT;
     } else {
         TT_THROW("Unsupported memory layout");
     }
@@ -163,6 +189,20 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
     uint32_t Ht_per_batch_b = std::min((NC * H / TILE_HEIGHT) / bN, Ht);
     uint32_t batch_b = Ht / Ht_per_batch_b;
 
+    std::vector<CoreCoord> height_core_coords;
+    if (a_height_sharded && b_interleaved) {
+        bool row_major_orientation = shard_spec.orientation == ShardOrientation::ROW_MAJOR;
+        height_core_coords = corerange_to_cores(all_cores, std::nullopt, row_major_orientation);
+        
+        log_debug(
+            tt::LogOp,
+            "Height-sharded broadcast using {} cores (row_major={}), shard shape [{} , {}]",
+            ncores,
+            row_major_orientation,
+            shard_spec.shape[0],
+            shard_spec.shape[1]);
+    }
+
     log_debug(
         tt::LogOp,
         "ncores {}, ncores_x {}, Wt {}, Ht {}, h_blk {}, w_blk {}, src0_cb_index {}, src1_cb_index {}, output_cb_index "
@@ -179,18 +219,18 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
         dst_is_dram,
         Ht_per_batch_b,
         batch_b);
-
+    
     for (uint32_t i = 0; i < ncores; i++) {
         CoreCoord core;
         uint32_t offset = 0;
-        if (a.memory_config().memory_layout() == TensorMemoryLayout::BLOCK_SHARDED) {
+        if (a_layout == TensorMemoryLayout::BLOCK_SHARDED) {
             core = {i / ncores_x, i % ncores_x};
             if (shard_spec.orientation == ShardOrientation::ROW_MAJOR) {
                 offset = Wt * (i / ncores_x) + Wt * ncores_y * ((i % ncores_x) / (ncores_x / bN));
             } else {
                 offset = Wt * (i % ncores_x) + Wt * ncores_x * ((i / ncores_x) / (ncores_y / bN));
             }
-        } else if (a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
+        } else if (a_layout == TensorMemoryLayout::WIDTH_SHARDED) {
             core = {i % ncores_x, i / ncores_x};
             if (shard_spec.orientation == ShardOrientation::ROW_MAJOR) {
                 offset = Wt * (core.x + core.y * ncores_x);
@@ -200,7 +240,20 @@ BinaryDeviceOperation::BroadcastHeightMultiCoreShardedOptimized::create(
                     offset = Wt * (ncores_y * ncores_x + core.x);
                 }
             }
+        } else if (a_height_sharded && b_interleaved) {
+            core = height_core_coords.at(i);
+            // uint32_t offset = 0;
+            // uint32_t tile_offset = 0;
+
+            // log_debug(
+            //     tt::LogOp,
+            //     "Height-sharded core {} uses offset {} tile_offset {} batch {}",
+            //     core,
+            //     offset,
+            //     tile_offset,
+            //     batch_b);
         }
+        
         uint32_t tile_offset = Wt * ncores;  // used in multi batch weight for block sharded
         tt_metal::SetRuntimeArgs(
             program,
@@ -263,21 +316,24 @@ void BinaryDeviceOperation ::BroadcastHeightMultiCoreShardedOptimized::override_
     uint32_t N = ashape[0], C = ashape[1];
     uint32_t bN = input_tensor_b->padded_shape()[0];
     uint32_t NC = N * C;
-    if (a.memory_config().memory_layout() == TensorMemoryLayout::BLOCK_SHARDED) {
-        Wt = shard_spec.shape[1] / TILE_WIDTH;
-        Ht = shard_spec.shape[0] / TILE_HEIGHT;
-    } else if (a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
+    auto a_layout = a.memory_config().memory_layout();
+    bool a_height_sharded = a_layout == TensorMemoryLayout::HEIGHT_SHARDED;
+    bool b_interleaved = b->memory_config().memory_layout() == TensorMemoryLayout::INTERLEAVED;
+    if (a_layout == TensorMemoryLayout::BLOCK_SHARDED || a_layout == TensorMemoryLayout::WIDTH_SHARDED || a_height_sharded) {
         Wt = shard_spec.shape[1] / TILE_WIDTH;
         Ht = shard_spec.shape[0] / TILE_HEIGHT;
     } else {
         TT_THROW("Unsupported memory layout");
     }
+
+    bool row_major_orientation = shard_spec.orientation == ShardOrientation::ROW_MAJOR;
+    auto height_core_coords = corerange_to_cores(all_cores, std::nullopt, row_major_orientation);
     uint32_t ncores_y = ncores / ncores_x;
     uint32_t Ht_per_b1 = 0;  // Ht per batch
     for (uint32_t i = 0; i < ncores; i++) {
         CoreCoord core;
         uint32_t offset = 0;
-        if (a.memory_config().memory_layout() == TensorMemoryLayout::BLOCK_SHARDED) {
+        if (a_layout == TensorMemoryLayout::BLOCK_SHARDED) {
             core = {i / ncores_x, i % ncores_x};
             Ht_per_b1 = Ht;
             if (shard_spec.orientation == ShardOrientation::ROW_MAJOR) {
@@ -285,7 +341,7 @@ void BinaryDeviceOperation ::BroadcastHeightMultiCoreShardedOptimized::override_
             } else {
                 offset = Wt * (i % ncores_x) + Wt * ncores_x * ((i / ncores_x) / (ncores_y / bN));
             }
-        } else if (a.memory_config().memory_layout() == TensorMemoryLayout::WIDTH_SHARDED) {
+        } else if (a_layout == TensorMemoryLayout::WIDTH_SHARDED) {
             core = {i % ncores_x, i / ncores_x};
             if (shard_spec.orientation == ShardOrientation::ROW_MAJOR) {
                 offset = Wt * (core.x + core.y * ncores_x);
@@ -295,7 +351,10 @@ void BinaryDeviceOperation ::BroadcastHeightMultiCoreShardedOptimized::override_
                     offset = Wt * (ncores_y * ncores_x + core.x);
                 }
             }
-            Ht_per_b1 = Ht / bN;
+        } else if (a_height_sharded && b_interleaved) {
+            core = height_core_coords.at(i);
+            // uint32_t offset = 0;
+            // uint32_t tile_offset = 0;
         }
         uint32_t tile_offset = Wt * ncores;
 
