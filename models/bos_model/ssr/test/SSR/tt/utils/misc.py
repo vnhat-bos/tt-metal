@@ -106,15 +106,21 @@ def setup_host_input(torch_input, img_config, cq_id=0):
         - Each image is in host and is reshaped to (1, 1, H*W, C).
         - The image channel is padded, required for Persistent L1-Sharding).
     """
+    NUM_SPLIT = 2
 
     # Process only 1 batch, to channel last
     torch_input = torch_input[0].permute(0, 2, 3, 1)
 
+    assert torch_input.shape[0] % NUM_SPLIT == 0, "Input batch size must be divisible by NUM_SPLIT. Got batch_size {} and NUM_SPLIT {}".format(
+        torch_input.shape[0], NUM_SPLIT
+    )
+
     # Reshape and padding
+    patch_size = torch_input.shape[0]//NUM_SPLIT
     input_list = []
-    for i in range(torch_input.shape[0]):
+    for i in range(NUM_SPLIT):
         # Single batch dimension
-        inp = torch_input[i : i + 1]
+        inp = torch_input[i * patch_size : (i + 1) * patch_size]
         inp = ttnn.from_torch(
             inp,
             dtype=img_config["dtype"],
@@ -171,13 +177,13 @@ def setup_l1_sharded_config(ttnn_host_input, device):
 
 def setup_dram_input(ttnn_tensors, img_config, device, cq_id=0):
     # Create DRAM resident for input tensors
-    num_cams = img_config["num_cams"]
+    num_tensor = len(ttnn_tensors)
 
     # Setup tensor config
     mem_config = setup_dram_sharded_config(ttnn_tensors[0], device)
 
     # Allocate persistent input on device
-    input_device = [ttnn_tensors[i].to(device, mem_config, cq_id=cq_id) for i in range(num_cams)]
+    input_device = [ttnn_tensors[i].to(device, mem_config, cq_id=cq_id) for i in range(num_tensor)]
 
     return input_device
 
@@ -226,7 +232,7 @@ def extract_data_from_container(data, tensor="tt", output_storage=None, device=N
         ## Initialize DRAM input storage for images if not provided
         img_dram = setup_dram_input(img_host, img_config, device, cq_id=cq_id) if output_storage is None else output_storage["img"][0]
         ## Copy to device
-        for i in range(img_config['num_cams']):
+        for i in range(len(img_host)):
             ttnn.copy_host_to_device_tensor(
                 img_host[i],
                 img_dram[i],
