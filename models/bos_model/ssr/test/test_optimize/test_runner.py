@@ -211,7 +211,7 @@ class MockDataLoader:
 @pytest.fixture(scope="session")
 def device():
     """Open a TT device once per session, enable persistent kernel cache, close on teardown."""
-    device_dict = {"device_id": 0, "l1_small_size": 29 * 1024, "trace_region_size": 16171008}
+    device_dict = {"device_id": 0, "l1_small_size": 29 * 1024, "trace_region_size": 16180224}
     if DOUBLE_CQ:
         device_dict["num_command_queues"] = 2
     dev = device_box.open(device_dict, enable_program_cache=True)
