@@ -2,7 +2,7 @@ import copy
 import os
 import warnings
 from test.common import *
-from test.utils import compare_tensors, pt2tt
+from test.utils import compare_tensors, pt2tt, tt2pt
 from weakref import ref
 
 import torch
@@ -136,37 +136,47 @@ class BEVFormerEncoder(TransformerLayerSequence):
         lidar2img = ttnn.experimental.view(lidar2img, (1, 1, 6, 4, 4))
         lidar2img = ttnn.repeat(lidar2img, ttnn.Shape([4, 1, 1, 1, 1]))
 
+        # 4, 1, 6, 10_000, 4 @ (4, 1, 6, 4, 4).T
+        # => 4, 1, 6, 10_000, 4
         reference_points_cam = ttnn.matmul(
             self.reference_points,
             lidar2img,
             transpose_b=True,
         )
 
-        reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3))
-        ref_z = reference_points_cam[:, 2:3]
+        # 4, 4, 1, 6, 10_000
+        reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3), memory_config=ttnn.L1_MEMORY_CONFIG)
+        # ref_z = reference_points_cam[:, 2:3]
+        # 4, 1, 1, 6, 10_000
+        ref_z = ttnn.slice(reference_points_cam, [0, 2, 0, 0, 0], [4, 3, 1, 6, 10_752], memory_config=ttnn.L1_MEMORY_CONFIG)
 
         eps = 1e-5
         bev_mask = ttnn.gt(ref_z, eps, memory_config=ttnn.L1_MEMORY_CONFIG)
         # broad-cast is potentially erroneous -> manually repeat
-        tmp = ttnn.maximum(ref_z, ttnn.full_like(ref_z, eps))
-        tmp = ttnn.repeat_interleave(tmp, 2, 1)
+        tmp = ttnn.maximum(ref_z, ttnn.full_like(ref_z, eps), output_tensor=ref_z)
+        # tmp = ttnn.repeat_interleave(tmp, 2, 1)
         reference_points_cam = ttnn.divide(reference_points_cam[:, 0:2], tmp, memory_config=ttnn.L1_MEMORY_CONFIG)
+        tmp.deallocate()
 
         ref_x = ttnn.div(reference_points_cam[:, 0:1], 640)  # img_metas[0]['img_shape'][0][1])
         ref_y = ttnn.div(reference_points_cam[:, 1:2], 384)  # img_metas[0]['img_shape'][0][0])
+        reference_points_cam.deallocate()
+
+        reference_points_cam = ttnn.concat([ref_x, ref_y], 1, memory_config=ttnn.L1_MEMORY_CONFIG)
+        # reference_points_cam = ttnn.to_layout(reference_points_cam, ttnn.ROW_MAJOR_LAYOUT)
+        reference_points_cam = ttnn.reshape(reference_points_cam, (8, 6, 10_752))
 
         bev_mask = ttnn.logical_and_(bev_mask, ttnn.gt(ref_x, 0.0))
-        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt(ref_x, 1.0))
+        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt_(ref_x, 1.0))
+        ref_x.deallocate()
         bev_mask = ttnn.logical_and_(bev_mask, ttnn.gt(ref_y, 0.0))
-        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt(ref_y, 1.0))
+        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt_(ref_y, 1.0))
+        ref_y.deallocate()
 
-        # bev_mask = torch.nan_to_num(bev_mask)
-
-        reference_points_cam = ttnn.concat([ref_x, ref_y], 1)
-        # reference_points_cam = ttnn.to_layout(reference_points_cam, ttnn.ROW_MAJOR_LAYOUT)
-        reference_points_cam = ttnn.reshape(reference_points_cam, (8, 6, self.bev_h * self.bev_w))
         reference_points_cam = ttnn.permute(reference_points_cam, (1, 2, 0))
         # reference_points_cam = ttnn.repeat(reference_points_cam, (1, 1, 16))
+
+        # bev_mask = torch.nan_to_num(bev_mask)
 
         bev_mask = ttnn.squeeze(ttnn.permute(bev_mask, (1, 3, 2, 4, 0)), 0)
 
