@@ -42,7 +42,7 @@ warnings.filterwarnings("ignore")
 # Constants
 DEFAULT_DEVICE_ID = 0
 DEFAULT_L1_SMALL_SIZE = 29 * 1024  # in KB
-DEFAULT_TRACE_REGION_SIZE = 11759616
+DEFAULT_TRACE_REGION_SIZE = 16229376
 DEFAULT_NUM_COMMAND_QUEUES = 2
 DEFAULT_PCC_THRESHOLD = 0.98
 
@@ -70,6 +70,8 @@ def run_inference(runner, data_loader, **kwargs):
                 tt_times.append(execution_time)
                 prog_bar.update()
 
+            tt_times = tt_times[2:]
+            logger.info(f"TTNN Inference time: {sum(tt_times) / len(tt_times):.4f} seconds per sample")
             if not kwargs.get("repeat", False): 
                 break
 
