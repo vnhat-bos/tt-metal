@@ -100,22 +100,21 @@ class SSRPerformanceRunner:
         NOTE: Accepts *args to tolerate older call sites that accidentally passed
         an extra first positional argument. It is ignored to preserve behavior.
         """
-        for key in self.output_storage:
-            self.host_output[key] = ttnn.to_torch(tensor=self.output_storage[key], device=device, cq_id=cq_id)
+        self.host_output["ego_fut_preds"] = ttnn.to_torch(
+            tensor=self.output_storage["ego_fut_preds"], device=device, cq_id=cq_id
+        )
 
     def _clone_tt_out_to_output_storage(self) -> None:
         """Clone current tt_out to persistent output_storage."""
-        for key in self.runner_infra.tt_out:
-            self.output_storage[key] = ttnn.clone(self.runner_infra.tt_out[key])
+        self.output_storage["ego_fut_preds"] = ttnn.clone(self.runner_infra.tt_out["ego_fut_preds"])
 
     def _persist_tt_out_to_output_storage(self) -> None:
         """Identity-copy current tt_out to persistent output_storage (in-place reuse)."""
-        for key in self.runner_infra.tt_out:
-            self.output_storage[key] = ttnn.identity(
-                input_tensor=self.runner_infra.tt_out[key],
-                memory_config=self.runner_infra.tt_out[key].memory_config(),
-                output_tensor=self.output_storage[key],
-            )
+        self.output_storage["ego_fut_preds"] = ttnn.identity(
+            input_tensor=self.runner_infra.tt_out["ego_fut_preds"],
+            memory_config=self.runner_infra.tt_out["ego_fut_preds"].memory_config(),
+            output_tensor=self.output_storage["ego_fut_preds"],
+        )
 
     def _should_post_process(self, **kwargs: Any) -> bool:
         return kwargs.get("visualize", False) or kwargs.get("validate", False)
@@ -129,33 +128,34 @@ class SSRPerformanceRunner:
             self._record_event("start_compute_event", self.compute_cq_id)
             self._record_event("finish_read_event", self.io_cq_id)
 
-            # Write CQ waits for compute CQ
-            ttnn.wait_for_event(self.io_cq_id, self.start_compute_event.pop(0))
-            self.input_storage.set(
-                extract_data_from_container(
-                    data=deepcopy(data),
-                    tensor="tt",
-                    device=self.device,
-                    input_config=self.common_config["input_config"],
-                    cq_id=self.io_cq_id,
+            for _ in range(2):
+                input_data = deepcopy(data)
+                ttnn.wait_for_event(self.io_cq_id, self.start_compute_event.pop(0))
+                self.input_storage.set(
+                    extract_data_from_container(
+                        data=input_data,
+                        tensor="tt",
+                        device=self.device,
+                        input_config=self.common_config["input_config"],
+                        cq_id=self.io_cq_id,
+                    )
                 )
-            )
-            self._record_event("finish_write_event", self.io_cq_id)
+                self._record_event("finish_write_event", self.io_cq_id)
 
-            # Compute CQ waits for write CQ
-            ttnn.wait_for_event(self.compute_cq_id, self.finish_write_event.pop(0))
-            self._record_event("start_compute_event", self.compute_cq_id)
-            self.runner_infra.run(self.input_storage.get())
+                # Compute CQ waits for write CQ
+                ttnn.wait_for_event(self.compute_cq_id, self.finish_write_event.pop(0))
+                self._record_event("start_compute_event", self.compute_cq_id)
+                self.runner_infra.run(self.input_storage.get())
 
-            # Copy outputs to device-persistent storage
-            ttnn.wait_for_event(self.compute_cq_id, self.finish_read_event.pop(0))
-            self._clone_tt_out_to_output_storage()
-            self._record_event("end_compute_event", self.compute_cq_id)
+                # Persist to device storage
+                ttnn.wait_for_event(self.compute_cq_id, self.finish_read_event.pop(0))
+                self._clone_tt_out_to_output_storage()
+                self._record_event("end_compute_event", self.compute_cq_id)
 
-            # Host read
-            ttnn.wait_for_event(self.io_cq_id, self.end_compute_event.pop(0))
-            self._copy_to_host(device=self.device, cq_id=self.io_cq_id)
-            self._record_event("finish_read_event", self.io_cq_id)
+                ttnn.wait_for_event(self.io_cq_id, self.end_compute_event.pop(0))
+                self._copy_to_host(device=self.device, cq_id=self.io_cq_id)
+                self._record_event("finish_read_event", self.io_cq_id)
+                self._event_synchronize("finish_read_event")
         else:
             # Single CQ
             self.input_storage = extract_data_from_container(
@@ -166,7 +166,12 @@ class SSRPerformanceRunner:
                 cq_id=self.io_cq_id,
             )
             self.runner_infra.run(self.input_storage)
+
+            # Persist and host read
             self._clone_tt_out_to_output_storage()
+            self._copy_to_host(self.output_storage, device=self.device, cq_id=self.io_cq_id)
+
+            ttnn.synchronize_device(self.device)
 
         self.is_compiled = True
 
@@ -220,7 +225,7 @@ class SSRPerformanceRunner:
             self._record_event("end_compute_event", self.compute_cq_id)
 
             # Final sample branch
-            if kwargs.get("sample_idx", 0) == len(self.dataset) - 1:
+            if kwargs.get("sample_idx", 0) == len(self.dataset) - 1 or kwargs.get("sample_idx", 0) == -1:
                 ttnn.wait_for_event(self.io_cq_id, self.end_compute_event.pop(0))
                 self._copy_to_host(device=self.device, cq_id=self.io_cq_id)
                 self._record_event("finish_read_event", self.io_cq_id)
@@ -356,7 +361,7 @@ class SSRPerformanceRunner:
             self._record_event("end_compute_event", self.compute_cq_id)
 
             # Final sample branch
-            if kwargs.get("sample_idx", 0) == len(self.dataset) - 1:
+            if kwargs.get("sample_idx", 0) == len(self.dataset) - 1 or kwargs.get("sample_idx", 0) == -1:
                 ttnn.wait_for_event(self.io_cq_id, self.end_compute_event.pop(0))
                 self._copy_to_host(device=self.device, cq_id=self.io_cq_id)
                 self._record_event("finish_read_event", self.io_cq_id)
@@ -462,9 +467,11 @@ class SSRPerformanceRunner:
 
         if kwargs.get("validate", False):
             pt_result = self._reference_run(data)
-            tt_fut_preds = pt_result[0]["pts_bbox"]["ego_fut_preds"]
-            pt_fut_preds = tt_result[0]["pts_bbox"]["ego_fut_preds"]
-            _passed, _msg = op.compare_tensors(pt_fut_preds, tt_fut_preds, pcc=kwargs.get("pcc_threshold", 0.97))
+            pt_fut_preds = pt_result[0]["pts_bbox"]["ego_fut_preds"]
+            tt_fut_preds = tt_result[0]["pts_bbox"]["ego_fut_preds"]
+            _passed, _msg = op.compare_tensors(
+                pt_fut_preds, tt_fut_preds, pcc=kwargs.get("pcc_threshold", 0.97)
+            )
 
     # ----------------------------- Public API --------------------------------
 
@@ -517,10 +524,12 @@ class SSRPerformanceRunner:
         if kwargs.get("visualize", False):
             if self.visualizer is None:
                 self.visualizer = Visualizer(dataset=self.dataset)
-            if not kwargs.get("realtime", False):
-                self.visualizer.set_output(self.get_output_path())
+                if not kwargs.get("realtime", False):
+                    self.visualizer.set_output(self.get_output_path())
             if kwargs.get("use_bev", False) and self.bevloader is None:
                 self.bevloader = BEVMapLoader(dataset=self.dataset)
+                logger.info("Pre-loading BEV map from dataset")
+                self.bevloader.draw_bev_map()
 
         output = None
         if mode == "reference":
