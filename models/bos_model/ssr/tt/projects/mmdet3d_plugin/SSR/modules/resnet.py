@@ -334,7 +334,7 @@ class ResNet(BaseModule):
             stride=(2, 2),
             padding=(3, 3),
             bias=True,
-            activation="relu",
+            activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU),
         )
 
         # CONV2_X
@@ -391,7 +391,7 @@ class ResNet(BaseModule):
                     kernel_size=(1, 1),
                     stride=(stride, stride),
                     bias=True,
-                    activation="",
+                    activation=None,
                 ),
             )
 
@@ -425,7 +425,7 @@ class ResNet(BaseModule):
     def prepare_persistent_l1_spec(self, tensor):
         # Memory config
         self.sharded_l1_mem_config = setup_l1_sharded_config(tensor, device=self.device)
-        tensor = ttnn.bos_reshard(tensor, self.sharded_l1_mem_config)
+        temp_tensor = ttnn.bos_reshard(tensor, self.sharded_l1_mem_config)
 
         # Reallocate to avoid fragmentation
         temp_tensor = ttnn.reallocate(temp_tensor)
