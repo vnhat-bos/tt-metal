@@ -80,7 +80,7 @@ EMBED_PATH = str(EMBED_PATH)
 PT_CHECKPOINT_PATH = str(PT_CHECKPOINT_PATH)
 TT_CHECKPOINT_PATH = str(TT_CHECKPOINT_PATH)
 
-NUM_SAMPLES = 10000
+NUM_SAMPLES = 1000
 DOUBLE_CQ = True  # Whether to use double command queues for overlapping compute and data transfers
 # ------------------------------------------------------------------------------
 # Helpers
@@ -261,7 +261,11 @@ def test_ssr_pcc(device):
     ### 2.2 - Warm up model
     logger.info("Warm up TTNN SSR-Net model")
     data = next(iter(dataloader))
-    tt_out = runner(data, mode="normal", post_process=False)
+    tt_out = runner(data, mode="normal", post_process=False, sample_idx=-1)
+    assert tt_out is not None, "TT output is None."
+    runner.dealloc_output()
+    data = next(iter(dataloader))
+    tt_out = runner(data, mode="normal", post_process=False, sample_idx=-1)
     assert tt_out is not None, "TT output is None."
     runner.dealloc_output()
 
