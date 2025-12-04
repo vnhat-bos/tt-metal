@@ -2,7 +2,7 @@ import copy
 import os
 import warnings
 from test.common import *
-from test.utils import compare_tensors, pt2tt, tt2pt
+from test.utils import compare_tensors, pt2tt
 from weakref import ref
 
 import torch
@@ -52,10 +52,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         # [3_072, 1_344, 1_376, 3_680, 928, 992]
 
         self.ref_2d = pt2tt(
-            torch.concat([
-                self.get_reference_points(bev_h, bev_w, dim="2d").view(1, 10_000, 2),
-                torch.zeros(1, 752, 2)],
-                dim=1),
+            self.get_reference_points(bev_h, bev_w, dim="2d"),
             device=device_box.get(),
             dtype=ttnn.bfloat16,
         )
@@ -70,8 +67,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
             for i in range(6)
         ]
         weight_hash_config_case = ttnn.BilinearWeightHashConfig(
-            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, 
-            memory_config=ttnn.DRAM_MEMORY_CONFIG
+            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG
         )
         self.bilinear_weight_hash = ttnn.bos_create_bilinear_hash(device_box.get(), **weight_hash_config_case)
 
@@ -147,36 +143,30 @@ class BEVFormerEncoder(TransformerLayerSequence):
         )
 
         reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3))
-        # ref_z = reference_points_cam[:, 2:3]
-        ref_z = ttnn.slice(reference_points_cam, [0, 2, 0, 0, 0], [4, 3, 1, 6, 10_752], memory_config=ttnn.L1_MEMORY_CONFIG)
+        ref_z = reference_points_cam[:, 2:3]
 
         eps = 1e-5
         bev_mask = ttnn.gt(ref_z, eps, memory_config=ttnn.L1_MEMORY_CONFIG)
         # broad-cast is potentially erroneous -> manually repeat
-        tmp = ttnn.maximum(ref_z, ttnn.full_like(ref_z, eps), output_tensor=ref_z)
-        # tmp = ttnn.repeat_interleave(tmp, 2, 1)
+        tmp = ttnn.maximum(ref_z, ttnn.full_like(ref_z, eps))
+        tmp = ttnn.repeat_interleave(tmp, 2, 1)
         reference_points_cam = ttnn.divide(reference_points_cam[:, 0:2], tmp, memory_config=ttnn.L1_MEMORY_CONFIG)
-        tmp.deallocate()
 
         ref_x = ttnn.div(reference_points_cam[:, 0:1], 640)  # img_metas[0]['img_shape'][0][1])
         ref_y = ttnn.div(reference_points_cam[:, 1:2], 384)  # img_metas[0]['img_shape'][0][0])
-        reference_points_cam.deallocate()
-
-        reference_points_cam = ttnn.concat([ref_x, ref_y], 1, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # reference_points_cam = ttnn.to_layout(reference_points_cam, ttnn.ROW_MAJOR_LAYOUT)
-        reference_points_cam = ttnn.reshape(reference_points_cam, (8, 6, 10_752))
 
         bev_mask = ttnn.logical_and_(bev_mask, ttnn.gt(ref_x, 0.0))
-        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt_(ref_x, 1.0))
-        ref_x.deallocate()
+        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt(ref_x, 1.0))
         bev_mask = ttnn.logical_and_(bev_mask, ttnn.gt(ref_y, 0.0))
-        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt_(ref_y, 1.0))
-        ref_y.deallocate()
-
-        reference_points_cam = ttnn.permute(reference_points_cam, (1, 2, 0))
-        # reference_points_cam = ttnn.repeat(reference_points_cam, (1, 1, 16))
+        bev_mask = ttnn.logical_and_(bev_mask, ttnn.lt(ref_y, 1.0))
 
         # bev_mask = torch.nan_to_num(bev_mask)
+
+        reference_points_cam = ttnn.concat([ref_x, ref_y], 1)
+        # reference_points_cam = ttnn.to_layout(reference_points_cam, ttnn.ROW_MAJOR_LAYOUT)
+        reference_points_cam = ttnn.reshape(reference_points_cam, (8, 6, self.bev_h * self.bev_w))
+        reference_points_cam = ttnn.permute(reference_points_cam, (1, 2, 0))
+        # reference_points_cam = ttnn.repeat(reference_points_cam, (1, 1, 16))
 
         bev_mask = ttnn.squeeze(ttnn.permute(bev_mask, (1, 3, 2, 4, 0)), 0)
 
@@ -213,27 +203,24 @@ class BEVFormerEncoder(TransformerLayerSequence):
         shift_ref_2d = self.ref_2d + shift
         ttnn.deallocate(shift)
 
-        bs, len_bev, num_bev_level = self.ref_2d.shape
+        bs, len_bev, num_bev_level, _ = self.ref_2d.shape
         if prev_bev is not None:
             # [bs * 2, len_bev, -1]
             prev_bev = ttnn.concat(
                 [prev_bev, ttnn.sharded_to_interleaved(bev_query, memory_config=ttnn.L1_MEMORY_CONFIG)], 0
             )
             # [bs * 2, len_bev, num_bev_level, 2]
-            hybird_ref_2d = ttnn.concat([shift_ref_2d, self.ref_2d], 0, memory_config=ttnn.L1_MEMORY_CONFIG)
+            hybird_ref_2d = ttnn.concat([shift_ref_2d, self.ref_2d], 0)
             ttnn.deallocate(shift_ref_2d)
         else:
-            hybird_ref_2d = ttnn.concat([self.ref_2d, self.ref_2d], 0, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # 2, 10_000, 2
+            hybird_ref_2d = ttnn.concat([self.ref_2d, self.ref_2d], 0)
         hybird_ref_2d = ttnn.multiply_(hybird_ref_2d, 100.0)
         hybird_ref_2d = ttnn.sub_(hybird_ref_2d, 0.5)
         hybird_ref_2d = ttnn.to_layout(hybird_ref_2d, ttnn.ROW_MAJOR_LAYOUT)
-
-        # 10_000, 2, 2
-        hybird_ref_2d = ttnn.permute(hybird_ref_2d, (1, 0, 2), memory_config=ttnn.L1_MEMORY_CONFIG)
-        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 4))  # 10_000, 2, 8
-        hybird_ref_2d = ttnn.reshape(hybird_ref_2d, (1, 10_752, 16))
-        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 8))   # 1, 10_000, 128
+        hybird_ref_2d = ttnn.permute(hybird_ref_2d, (2, 1, 0, 3))  # 1, 10_000, 2, 2
+        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 1, 4))  # 1, 10_000, 2, 8
+        hybird_ref_2d = ttnn.reshape(hybird_ref_2d, (1, self.bev_h * self.bev_w, 16))
+        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 8))  # 1, 10_000, 128
         # hybird_ref_2d = ttnn.to_layout(hybird_ref_2d, ttnn.TILE_LAYOUT)
 
         indexes = []
@@ -242,25 +229,24 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         # TODO: Edit ttnn.nonzero to take in 6xN array instead of looping 6 times
         groups = {(1, 2): [], (4, 5): []}
+
         reference_points_rebatch_lst = []
 
         for i in range(bev_mask.shape[0]):
-            reference_points_rebatch = ttnn.clone(self.reference_points_rebatch_zeros[i], memory_config=ttnn.L1_MEMORY_CONFIG)
+            reference_points_rebatch = ttnn.clone(self.reference_points_rebatch_zeros[i])
             _, indices = ttnn.bos_nonzero(
                 ttnn.to_layout(bev_mask_sums[i], ttnn.ROW_MAJOR_LAYOUT),
                 max_length=self.max_len[i],
             )
             reference_points_rebatch = ttnn.operations.moreh.getitem(
-                reference_points_cam[i], [indices], [0], 
-                memory_config=ttnn.L1_MEMORY_CONFIG
+                reference_points_cam[i], [indices], [0], memory_config=ttnn.L1_MEMORY_CONFIG
             )
             indexes.append(indices)
 
             reference_points_rebatch = ttnn.multiply_(reference_points_rebatch, self.ref_3d_denormalizer[i])
             reference_points_rebatch = ttnn.sub_(reference_points_rebatch, 0.5)
             reference_points_rebatch = ttnn.repeat(
-                reference_points_rebatch, (1, 1, 16),
-                memory_config=ttnn.L1_MEMORY_CONFIG
+                reference_points_rebatch, (1, 1, 16), memory_config=ttnn.DRAM_MEMORY_CONFIG
             )
             reference_points_rebatch_lst.append(reference_points_rebatch)
 
@@ -277,15 +263,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
                     ttnn.deallocate(reference_points_rebatch_lst[id])
                     reference_points_rebatch_lst[id] = concat_tensor
 
-        reference_points_rebatch_lst[0] = ttnn.to_memory_config(
-            reference_points_rebatch_lst[0],
-            ttnn.DRAM_MEMORY_CONFIG
-        )
-        reference_points_rebatch_lst[3] = ttnn.to_memory_config(
-            reference_points_rebatch_lst[3],
-            ttnn.DRAM_MEMORY_CONFIG
-        )
-        indexes[3] = ttnn.reallocate(indexes[3])
         ttnn.deallocate(reference_points_cam)
 
         count = ttnn.gt(bev_mask_sums, 0.0)
