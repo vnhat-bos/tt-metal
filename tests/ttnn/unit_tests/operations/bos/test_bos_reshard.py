@@ -33,12 +33,15 @@ def setup_l1_sharded_input(device, torch_input_tensor=None, min_channels=32, num
         return math.ceil(x / min_channels) * min_channels
 
     # Define core grid based on the number of cores
-    if num_cores == 20:
-        core_grid = ttnn.CoreGrid(y=4, x=5)
-    elif num_cores == 16:
-        core_grid = ttnn.CoreGrid(y=4, x=4)
-    else:
-        core_grid = ttnn.CoreGrid(y=8, x=8)
+    # if num_cores == 20:
+    #     core_grid = ttnn.CoreGrid(y=4, x=5)
+    # elif num_cores == 16:
+    #     core_grid = ttnn.CoreGrid(y=4, x=4)
+    # else:
+    #     core_grid = ttnn.CoreGrid(y=8, x=8)
+    core_grid = device.compute_with_storage_grid_size()
+    num_cores = core_grid.x * core_grid.y
+    core_grid = ttnn.CoreGrid(y=core_grid.y, x=core_grid.x)
 
     # Convert tensor layout from NCHW to NHWC
     torch_input_tensor = torch_input_tensor.permute((0, 2, 3, 1))
@@ -64,17 +67,17 @@ def setup_l1_sharded_input(device, torch_input_tensor=None, min_channels=32, num
 
     # Pad the input tensor to ensure alignment
     tt_inputs_host = ttnn.from_torch(torch_input_tensor, dtype=ttnn.bfloat16, layout=ttnn.Layout.ROW_MAJOR)
-    tt_inputs_host = ttnn.pad(
-        tt_inputs_host,
-        [
-            tt_inputs_host.shape[0],
-            tt_inputs_host.shape[1],
-            tt_inputs_host.shape[2],
-            min_channels if c < min_channels else align(c),
-        ],
-        [0, 0, 0, 0],
-        0,
-    )
+    # tt_inputs_host = ttnn.pad(
+    #     tt_inputs_host,
+    #     [
+    #         tt_inputs_host.shape[0],
+    #         tt_inputs_host.shape[1],
+    #         tt_inputs_host.shape[2],
+    #         min_channels if c < min_channels else align(c),
+    #     ],
+    #     [0, 0, 0, 0],
+    #     0,
+    # )
 
     return tt_inputs_host, input_mem_config
 
