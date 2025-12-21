@@ -160,7 +160,10 @@ class SSR(nn.Module):
 
         # During inference, we save the BEV features and ego motion of each timestamp.
         self.prev_frame_info["prev_pos"] = tmp_pos
-        self.prev_frame_info["prev_bev"] = ttnn.clone(outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG)
+        if self.prev_frame_info["prev_bev"] is None:
+            self.prev_frame_info["prev_bev"] = ttnn.clone(outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG)
+        else:
+            self.prev_frame_info["prev_bev"] = ttnn.identity(outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG, output_tensor=self.prev_frame_info["prev_bev"])
         # memory_config=self.prev_frame_info["prev_bev"].memory_config() if self.prev_frame_info["prev_bev"] else new_prev_bev.memory_config(),
         self.prev_frame_info["prev_angle"] = tmp_angle
 

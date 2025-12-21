@@ -42,7 +42,7 @@ warnings.filterwarnings("ignore")
 # Constants
 DEFAULT_DEVICE_ID = 0
 DEFAULT_L1_SMALL_SIZE = 29 * 1024  # in KB
-DEFAULT_TRACE_REGION_SIZE = 16229376
+DEFAULT_TRACE_REGION_SIZE = 16254976
 DEFAULT_NUM_COMMAND_QUEUES = 2
 DEFAULT_PCC_THRESHOLD = 0.98
 
@@ -64,11 +64,15 @@ def run_inference(runner, data_loader, **kwargs):
     try:
         while True:
             prog_bar = mmcv.ProgressBar(len(dataset))
+            timestamp = time.time()
             for i, data in enumerate(data_loader):
+                logger.info(f"Data loader time: {time.time() - timestamp:.4f}s")
                 tt_result, execution_time = runner(data, mode="performant", sample_idx=i, **kwargs)
                 tt_results.extend(tt_result)
                 tt_times.append(execution_time)
                 prog_bar.update()
+                timestamp = time.time()
+
 
             tt_times = tt_times[2:]
             logger.info(f"TTNN Inference time: {sum(tt_times) / len(tt_times):.4f} seconds per sample")
@@ -288,17 +292,21 @@ def main():
     ### Warm up model
     logger.info("Warm up TTNN SSR-Net model")
     data = next(iter(data_loader))
-    tt_out = runner(data, mode="normal", post_process=False)
+    tt_out = runner(data, mode="normal", post_process=False, sample_idx=-1)
+    assert tt_out is not None, "TT output is None."
+    runner.dealloc_output()
+    data = next(iter(data_loader))
+    tt_out = runner(data, mode="normal", post_process=False, sample_idx=-1)
     assert tt_out is not None, "TT output is None."
     runner.dealloc_output()
 
-    # ### 2.3 - Trace capturing
+    # Trace capturing
     logger.info("Trace capture TTNN SSR-Net model")
     ttnn.synchronize_device(device)
     data = next(iter(data_loader))
     runner(data, mode="trace_capture")
 
-    ### 2.4 - Inference
+    ### Inference
     logger.info("Start inference on TTNN SSR-Net model")
     ttnn.synchronize_device(device)
     outputs = run_inference(
