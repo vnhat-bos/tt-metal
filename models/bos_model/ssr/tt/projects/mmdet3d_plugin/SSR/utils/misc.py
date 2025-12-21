@@ -7,6 +7,7 @@ from bos_metal import helpers, device_box
 import numpy as np
 import pandas as pd
 import time
+import math
 # import ace_tools as tools
 
 
@@ -117,7 +118,7 @@ def setup_host_input(torch_input, img_config, cq_id=0):
             cq_id=cq_id,
         )
         inp = ttnn.reshape(inp, (1, 1, inp.shape[0] * inp.shape[1] * inp.shape[2], inp.shape[3]))
-        inp = ttnn.pad(inp, [inp.shape[0], inp.shape[1], inp.shape[2], img_config["padding"]], [0, 0, 0, 0], 0)
+        # inp = ttnn.pad(inp, [inp.shape[0], inp.shape[1], inp.shape[2], img_config["padding"]], [0, 0, 0, 0], 0)
         input_list.append(inp)
 
     return input_list
@@ -145,6 +146,11 @@ def setup_dram_sharded_config(ttnn_host_input, device):
 
 
 def setup_l1_sharded_config(ttnn_host_input, device):
+    min_channels = 16
+    
+    def align(x):
+        return math.ceil(x / min_channels) * min_channels
+    
     def divup(a, b):
         return (a + b - 1) // b
 
@@ -153,7 +159,7 @@ def setup_l1_sharded_config(ttnn_host_input, device):
     mem_config = ttnn.create_sharded_memory_config(
         shape=(
             divup(ttnn_host_input.volume() // ttnn_host_input.padded_shape[-1], l1_grid_size.x * l1_grid_size.y),
-            ttnn_host_input.padded_shape[-1],
+            align(ttnn_host_input.padded_shape[-1]),
         ),
         core_grid=ttnn.CoreGrid(x=l1_grid_size.x, y=l1_grid_size.y),
         strategy=ttnn.ShardStrategy.HEIGHT,
