@@ -243,7 +243,7 @@ class SSRPerformanceRunner:
                     defer(lambda: self._record_execution_time())
                     if not kwargs.get("visualize", False):
                         defer(
-                            lambda: logger.debug(
+                            lambda: logger.info(
                                 f"Sample {kwargs.get('sample_idx', 0)} processed in "
                                 f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                             )
@@ -270,7 +270,7 @@ class SSRPerformanceRunner:
             ttnn.synchronize_device(self.device)
             self._record_execution_time()
             if not kwargs.get("visualize", False):
-                logger.debug(
+                logger.info(
                     f"Sample {kwargs.get('sample_idx', 0)} processed in "
                     f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                 )
@@ -378,7 +378,7 @@ class SSRPerformanceRunner:
                     defer(lambda: self._record_execution_time())
                     if not kwargs.get("visualize", False):
                         defer(
-                            lambda: logger.debug(
+                            lambda: logger.info(
                                 f"Sample {kwargs.get('sample_idx', 0)} processed in "
                                 f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                             )
@@ -405,7 +405,7 @@ class SSRPerformanceRunner:
             ttnn.synchronize_device(self.device)
             self._record_execution_time()
             if not kwargs.get("visualize", False):
-                logger.debug(
+                logger.info(
                     f"Sample {kwargs.get('sample_idx', 0)} processed in "
                     f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                 )

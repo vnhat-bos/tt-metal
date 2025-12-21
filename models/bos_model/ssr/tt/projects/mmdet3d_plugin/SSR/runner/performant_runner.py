@@ -185,12 +185,12 @@ class SSRPerformanceRunner:
         with torch.no_grad():
             self.runner_infra.run_ref(data_pt)
 
-        _, bbox_results = self.simple_test(
-            outs=self.runner_infra.ref_out,
-            img_metas=(data["img_metas"][0].data)[0],
-            ego_fut_cmd=(data["ego_fut_cmd"][0].data)[0],
-        )
-        return bbox_results
+        # _, bbox_results = self.simple_test(
+        #     outs=self.runner_infra.ref_out,
+        #     img_metas=(data["img_metas"][0].data)[0],
+        #     ego_fut_cmd=(data["ego_fut_cmd"][0].data)[0],
+        # )
+        return self.runner_infra.ref_out
 
     def _normal_run(self, data: Dict[str, Any], **kwargs: Any) -> Tuple[Dict[str, Any], float]:
         """Normal path (optionally visualize and/or compute metrics)."""
@@ -247,7 +247,7 @@ class SSRPerformanceRunner:
                     defer(lambda: self._record_execution_time())
                     if not kwargs.get("visualize", False):
                         defer(
-                            lambda: logger.debug(
+                            lambda: logger.info(
                                 f"Sample {kwargs.get('sample_idx', 0)} processed in "
                                 f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                             )
@@ -274,7 +274,7 @@ class SSRPerformanceRunner:
             ttnn.synchronize_device(self.device)
             self._record_execution_time()
             if not kwargs.get("visualize", False):
-                logger.debug(
+                logger.info(
                     f"Sample {kwargs.get('sample_idx', 0)} processed in "
                     f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                 )
@@ -382,7 +382,7 @@ class SSRPerformanceRunner:
                     defer(lambda: self._record_execution_time())
                     if not kwargs.get("visualize", False):
                         defer(
-                            lambda: logger.debug(
+                            lambda: logger.info(
                                 f"Sample {kwargs.get('sample_idx', 0)} processed in "
                                 f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                             )
@@ -409,7 +409,7 @@ class SSRPerformanceRunner:
             ttnn.synchronize_device(self.device)
             self._record_execution_time()
             if not kwargs.get("visualize", False):
-                logger.debug(
+                logger.info(
                     f"Sample {kwargs.get('sample_idx', 0)} processed in "
                     f"{self.execution_time:.4f} seconds -- FPS: {1.0 / self.execution_time:.2f}"
                 )
@@ -432,7 +432,7 @@ class SSRPerformanceRunner:
 
     def _post_process(self, tt_result: Dict[str, Any], data: Dict[str, Any], **kwargs: Any) -> None:
         """Visualization/validation path (batch size currently restricted to 1)."""
-        _, bbox_results = self.simple_test(
+        bbox_results = self.simple_test(
             outs=tt_result,
             img_metas=(data["img_metas"][0].data)[0],
             ego_fut_cmd=(data["ego_fut_cmd"][0].data)[0],
@@ -500,12 +500,11 @@ class SSRPerformanceRunner:
     ) -> Tuple[Any, Any]:
         """Test function without augmentation."""
         bbox_list = [dict() for _ in range(len(img_metas))]
-        new_prev_bev, bbox_pts, metric_dict = self.simple_test_pts(outs, ego_fut_cmd=ego_fut_cmd)
+        bbox_pts, metric_dict = self.simple_test_pts(outs, ego_fut_cmd=ego_fut_cmd)
         for result_dict, pts_bbox in zip(bbox_list, bbox_pts):
             result_dict["pts_bbox"] = pts_bbox
             result_dict["metric_results"] = metric_dict
-        return new_prev_bev, bbox_list
-
+        return bbox_list
     def simple_test_pts(
         self,
         outs: Dict[str, Any],
@@ -522,7 +521,7 @@ class SSRPerformanceRunner:
 
         assert len(bbox_results) == 1, "only support batch_size=1 now"
         metric_dict = None
-        return outs["bev_embed"], bbox_results, metric_dict
+        return bbox_results, metric_dict
 
     def run(self, data: Dict[str, Any], mode: str = "performant", **kwargs: Any) -> Any:
         # Lazy-init visualization utilities if needed
