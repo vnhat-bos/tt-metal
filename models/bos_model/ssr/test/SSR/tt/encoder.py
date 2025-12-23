@@ -140,8 +140,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
         lidar2img = ttnn.experimental.view(lidar2img, (1, 1, 6, 4, 4))
         lidar2img = ttnn.repeat(lidar2img, ttnn.Shape([4, 1, 1, 1, 1]))
 
-        # 4, 1, 6, 10_000, 4 @ (4, 1, 6, 4, 4).T
-        # => 4, 1, 6, 10_000, 4
         reference_points_cam = ttnn.matmul(
             self.reference_points,
             lidar2img,
@@ -242,6 +240,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         bev_mask_sums = ttnn.sum(bev_mask, -1)
         ttnn.deallocate(bev_mask)
 
+        # TODO: Edit ttnn.nonzero to take in 6xN array instead of looping 6 times
         groups = {(1, 2): [], (4, 5): []}
         reference_points_rebatch_lst = []
 
