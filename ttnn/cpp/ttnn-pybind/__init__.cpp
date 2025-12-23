@@ -68,6 +68,7 @@
 #include "ttnn/operations/pool/grid_sample/grid_sample_pybind.hpp"
 #include "ttnn/operations/prefetcher/prefetcher_pybind.hpp"
 #include "ttnn/operations/reduction/reduction_pybind.hpp"
+#include "ttnn/operations/reduction/tilize_untilize/tilize_untilize_pybind.hpp"
 #include "ttnn/operations/sliding_window/sliding_window_pybind.hpp"
 #include "ttnn/operations/transformer/transformer_pybind.hpp"
 #include "ttnn/operations/uniform/uniform_pybind.hpp"
