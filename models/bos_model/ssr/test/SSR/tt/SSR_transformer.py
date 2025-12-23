@@ -89,11 +89,11 @@ class SSRPerceptionTransformer(BaseModule):
         if isinstance(bev_queries, torch.Tensor):
             bev_queries, bev_pos, cams_embeds, level_embeds, reference_points = pt2tt(
                 [
-                    bev_queries.permute(1, 0, 2),
-                    bev_pos.permute(1, 0, 2),
+                    torch.concat([bev_queries, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
+                    torch.concat([bev_pos, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
                     cams_embeds,
                     level_embeds,
-                    reference_points,
+                    torch.concat([reference_points.squeeze(-1), torch.zeros(4, 1, 6, 752, 4)], dim=3),
                 ],
                 device=device_box.get(),
                 memory_config=memory_config,

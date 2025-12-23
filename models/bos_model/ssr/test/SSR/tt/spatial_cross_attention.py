@@ -11,7 +11,7 @@ from tt.projects.configs.ops_config import MyDict
 
 @ATTENTION.register_module(name="SpatialCrossAttention_tt")
 class SpatialCrossAttention(op.BaseModule):
-    count = 0
+    counter = 0
     """An attention module used in BEVFormer.
     Args:
         embed_dims (int): The embedding dimension of Attention.
@@ -45,7 +45,7 @@ class SpatialCrossAttention(op.BaseModule):
         self.output_proj = op.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
         self.max_len = [3_072, 1_344, 1_376, 3_680, 928, 992]
-        self.slots_ = ttnn.zeros((1, 10000, embed_dims), dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG, device=device_box.get())
+        self.slots_ = ttnn.zeros((1, 10_752, embed_dims), dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG, device=device_box.get())
 
     def forward(
         self,
@@ -128,5 +128,5 @@ class SpatialCrossAttention(op.BaseModule):
             program_config=program_config["output_proj"].value
         )
 
-        SpatialCrossAttention.count += 1
+        SpatialCrossAttention.counter += 1
         return ttnn.add_(inp_residual, slots)

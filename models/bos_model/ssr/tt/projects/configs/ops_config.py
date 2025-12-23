@@ -101,94 +101,119 @@ program_config = MyDict(
     {
         "SSRHead": MyDict({
                 "transformer": MyDict({
-                        "encoder": MyDict({
-                            "self_attn": MyDict({
-                                "value_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                    compute_with_storage_grid_size=(5, 4),
-                                    in0_block_w=8,
-                                    out_subblock_h=1,
-                                    out_subblock_w=1,
-                                    per_core_M=32,
-                                    per_core_N=8,
-                                    fuse_batch=True,
-                                    fused_activation=None,
-                                    mcast_in0=False,
-                                ), 
-                                "output_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                    compute_with_storage_grid_size=(5, 4),
-                                    in0_block_w=8,
-                                    out_subblock_h=1,
-                                    out_subblock_w=8,
-                                    per_core_M=16,
-                                    per_core_N=8,
-                                    fuse_batch=True,
-                                    fused_activation=None,
-                                    mcast_in0=False,
-                                ),
-                            }),
-                            "cross_attn": MyDict({
-                                "output_proj":ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                    compute_with_storage_grid_size=(5, 4),
-                                    in0_block_w=4,
-                                    out_subblock_h=1,
-                                    out_subblock_w=8,
-                                    per_core_M=16,
-                                    per_core_N=8,
-                                    fuse_batch=True,
-                                    fused_activation=None,
-                                    mcast_in0=False,
-                                )
-                            }),
-                            "norm": MyDict({}),
-                            "ffn": MyDict({
-                                0: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                    compute_with_storage_grid_size=(5, 4),
-                                    in0_block_w=8,
-                                    out_subblock_h=1,
-                                    out_subblock_w=8,
-                                    per_core_M=16,
-                                    per_core_N=16,
-                                    fuse_batch=True,
-                                    fused_activation=ttnn.UnaryOpType.RELU,
-                                    mcast_in0=False,
-                                ),
-                                1: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                    compute_with_storage_grid_size=(5, 4),
-                                    in0_block_w=16,
-                                    out_subblock_h=1,
-                                    out_subblock_w=8,
-                                    per_core_M=16,
-                                    per_core_N=8,
-                                    fuse_batch=True,
-                                    fused_activation=None,
-                                    mcast_in0=False,
-                                ),
-                            })
+                    "encoder": MyDict({
+                        "self_attn": MyDict({
+                            "value_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=8,
+                                out_subblock_h=1,
+                                out_subblock_w=8,
+                                per_core_M=math.ceil(10_752 / 48 / 32) * 2,
+                                # per_core_M=20,
+                                per_core_N=8,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            ), 
+                            "attention_weights": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=16,
+                                out_subblock_h=1,
+                                out_subblock_w=2,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=20,
+                                per_core_N=2,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            ), 
+                            "sampling_offsets": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=16,
+                                out_subblock_h=1,
+                                out_subblock_w=4,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=20,
+                                per_core_N=4,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            ), 
+                            "output_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=8,
+                                out_subblock_h=1,
+                                out_subblock_w=8,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=10,
+                                per_core_N=8,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            ),
                         }),
+                        "cross_attn": MyDict({
+                            "output_proj":ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=8,
+                                out_subblock_h=1,
+                                out_subblock_w=8,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=10,
+                                per_core_N=8,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            )
+                        }),
+                        "norm": MyDict({}),
+                        "ffn": MyDict({
+                            0: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=8,
+                                out_subblock_h=1,
+                                out_subblock_w=8,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=10,
+                                per_core_N=16,
+                                fuse_batch=True,
+                                fused_activation=ttnn.UnaryOpType.RELU,
+                                mcast_in0=False,
+                            ),
+                            1: ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                                compute_with_storage_grid_size=(8, 6),
+                                in0_block_w=16,
+                                out_subblock_h=1,
+                                out_subblock_w=8,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
+                                # per_core_M=10,
+                                per_core_N=8,
+                                fuse_batch=True,
+                                fused_activation=None,
+                                mcast_in0=False,
+                            ),
+                        }),
+                    }),
                 }),
                 "tokenlearner": MyDict({
                         "mlp": MyDict({
                             "fc1": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                compute_with_storage_grid_size=ttnn.CoreCoord(5, 4),
+                                compute_with_storage_grid_size=ttnn.CoreCoord(8, 6),
                                 in0_block_w=16,
-                                out_subblock_h=4,
+                                out_subblock_h=1,
                                 out_subblock_w=2,
-                                out_block_h=math.ceil(10000 / 32 / 20),
-                                out_block_w=2,
-                                per_core_M=16,
+                                per_core_M=math.ceil(10_752 / 48 / 32),
                                 per_core_N=2,
                                 fuse_batch=True,
                                 fused_activation=ttnn.UnaryOpType.GELU,
                                 mcast_in0=False,
                             ),
                             "fc2": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                                compute_with_storage_grid_size=ttnn.CoreCoord(5, 4),
+                                compute_with_storage_grid_size=ttnn.CoreCoord(8, 6),
                                 in0_block_w=2,
-                                out_subblock_h=4,
+                                out_subblock_h=7,
                                 out_subblock_w=1,
-                                out_block_h=math.ceil(10000 / 32 / 20),
-                                out_block_w=1,
-                                per_core_M=math.ceil(10000 / 32 / 20),
+                                per_core_M=math.ceil(10_752 / 48 / 32),
                                 per_core_N=1,
                                 fuse_batch=True,
                                 fused_activation=None,
@@ -204,37 +229,64 @@ memory_config = MyDict(
     {
         "SSRHead": MyDict(
             {
-                "transformer": MyDict(
-                    {
-                        "encoder": MyDict({
-                            "bev_query": op.ShardedMemConfig(
-                                shape=(512, 256),
-                                core_grid=(5, 4),
-                                strategy='height',
+                "transformer": MyDict({
+                    "encoder": MyDict({
+                        "bev_query": op.ShardedMemConfig(
+                            # shape=(512, 256),
+                            shape=(math.ceil(10_752 / 48 / 32) * 32, 256),
+                            # shape=(320, 256),
+                            core_grid=(8, 6),
+                            strategy='height',
+                            as_shard_shape=True
+                        ),
+                        "self_attn": MyDict({
+                            "query": op.ShardedMemConfig(
+                                # (224, 512), 
+                                (math.ceil(10_752 / 48 / 32) * 32, 512),
+                                core_grid=(8, 6), 
+                                strategy="height", 
                                 as_shard_shape=True
                             ),
-                            "self_attn": MyDict({
-                                "value": op.ShardedMemConfig((1024, 256), (5, 4), "height", as_shard_shape=True),
-                                "value_proj": DRAM_INTERLEAVE,
-                                "output_proj": L1_HEIGHT,
-                            }),
-                            "cross_attn": MyDict({
-                                "output_proj": L1_HEIGHT
-                            }),
-                            "ffn": L1_HEIGHT,
-                        })
-                    }
-                ),
+                            "attention_weights": op.ShardedMemConfig(
+                                # (224, 64), 
+                                (math.ceil(10_752 / 48 / 32) * 32, 64),
+                                core_grid=(8, 6), 
+                                strategy="height", 
+                                as_shard_shape=True
+                            ),
+                            "sampling_offsets": op.ShardedMemConfig(
+                                # (224, 128), 
+                                (math.ceil(10_752 / 48 / 32) * 32, 128),
+                                core_grid=(8, 6), 
+                                strategy="height", 
+                                as_shard_shape=True
+                            ),
+                            "value": op.ShardedMemConfig(
+                                # (640, 256), 
+                                (math.ceil(10_752 / 48 / 32) * 32 * 2, 256),
+                                (8, 6), 
+                                "height", 
+                                as_shard_shape=True
+                            ),
+                            "value_proj": ttnn.DRAM_MEMORY_CONFIG,
+                            "output_proj": ttnn.L1_HEIGHT_SHARDED_MEMORY_CONFIG,
+                        }),
+                        "cross_attn": MyDict({
+                            "output_proj": ttnn.L1_HEIGHT_SHARDED_MEMORY_CONFIG
+                        }),
+                        "ffn": ttnn.L1_HEIGHT_SHARDED_MEMORY_CONFIG,
+                    }),
+                }),
                 "navi_se": MyDict(
                     {
                         "x_se": ttnn.L1_MEMORY_CONFIG,
-                        "x": op.ShardedMemConfig(
-                            (64, 2016),
-                            (5, 4),
-                            "block",
-                            orientation=ttnn.ShardOrientation.COL_MAJOR,
-                            as_shard_shape=True,
-                        ),
+                        # "x": op.ShardedMemConfig(
+                        #     (64, 2016),
+                        #     (8, 6),
+                        #     "block",
+                        #     orientation=ttnn.ShardOrientation.COL_MAJOR,
+                        #     as_shard_shape=True,
+                        # ),
                         "mlp_reduce": ttnn.L1_MEMORY_CONFIG,
                         "mlp_expand": ttnn.L1_MEMORY_CONFIG,
                     }
@@ -242,21 +294,21 @@ memory_config = MyDict(
                 "concat": MyDict(
                     {
                         "bev_pos": op.ShardedMemConfig(
-                            shape=(512, 256),
-                            core_grid=(5, 4),
+                            shape=(224, 256),
+                            core_grid=(8, 6),
                             strategy='height',
                             as_shard_shape=True
                         ),
                         # "bev_navi_embed": ttnn.L1_MEMORY_CONFIG,
                         "bev_navi_embed": op.ShardedMemConfig(
-                            shape=(512, 256),
-                            core_grid=(5, 4),
+                            shape=(224, 256),
+                            core_grid=(8, 6),
                             strategy='height',
                             as_shard_shape=True
                         ),
                         "out_concat": op.ShardedMemConfig(
-                            shape=(512, 512),
-                            core_grid=(5, 4),
+                            shape=(224, 512),
+                            core_grid=(8, 6),
                             strategy='height',
                             as_shard_shape=True
                         ),
@@ -266,9 +318,10 @@ memory_config = MyDict(
                     {
                         "mlp": MyDict(
                             {
-                                "input": op.ShardedMemConfig((512, 512), (5, 4), "height", as_shard_shape=True),
-                                "fc1": op.ShardedMemConfig((512, 64), (5, 4), "height", as_shard_shape=True),
-                                "fc2": op.ShardedMemConfig((512, 32), (5, 4), "height", as_shard_shape=True),
+                                "input": op.ShardedMemConfig((224, 512), (8, 6), "height", as_shard_shape=True),
+                                # "fc1": op.ShardedMemConfig((512, 64), (5, 4), "height", as_shard_shape=True),
+                                "fc1": op.ShardedMemConfig((224, 64), (8, 6), "height", as_shard_shape=True),
+                                "fc2": op.ShardedMemConfig((224, 32), (8, 6), "height", as_shard_shape=True),
                             }
                         ),
                     }

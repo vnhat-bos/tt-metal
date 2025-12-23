@@ -175,7 +175,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 return_intermediate is `False`, otherwise it has shape
                 [num_layers, num_query, bs, embed_dims].
         """
-
+        torch.save(bev_query, "/tmp/bev_query.pt")
         output = bev_query
         intermediate = []
 
@@ -223,6 +223,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 bev_mask=bev_mask,
                 prev_bev=prev_bev,
                 **kwargs)
+            torch.save(output, f"/tmp/encoder.output.{lid}.pt")
 
             bev_query = output
             if self.return_intermediate:

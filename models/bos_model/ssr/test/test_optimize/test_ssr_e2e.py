@@ -274,6 +274,7 @@ def device():
         }, 
         enable_program_cache=True
     )
+    # ttnn.device.EnablePersistentKernelCache()
     yield dev
     device_box.close()
 
@@ -370,7 +371,8 @@ def test_ssr_pcc(device):
     for key in tt_out.keys():
         if key == "scene_query":
             continue
-        _, pcc = compare_tensors(ref_out[key], tt_out[key], 0.97)
+        breakpoint()
+        pcc, _ = compare_tensors(ref_out[key], tt_out[key], 0.97)
         assert pcc > 0.97, f"PCC below threshold: {pcc:.4f}; at key: {key}"
         logger.info(f"SSR test passed (PCC: {pcc:.4f})")
 

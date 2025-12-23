@@ -38,6 +38,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         max_len=3_680,
         **kwargs,
     ):
+
         super(BEVFormerEncoder, self).__init__(*args, **kwargs)
         self.return_intermediate = return_intermediate
 
@@ -47,14 +48,14 @@ class BEVFormerEncoder(TransformerLayerSequence):
         self.bev_h = bev_h
         self.bev_w = bev_w
 
-        # TODO: combine cam1 and cam2 + cam4 and cam5
         self.max_len = [3_072, 1_376, 1_376, 3_680, 992, 992]
         # [3_072, 1_344, 1_376, 3_680, 928, 992]
 
         self.ref_2d = pt2tt(
             torch.concat([
-                self.get_reference_points(bev_h, bev_w, dim="2d").reshape(1, 10_000, 2),
-                torch.zeros(1, 752, 2)], dim=1),
+                self.get_reference_points(bev_h, bev_w, dim="2d").view(1, 10_000, 2),
+                torch.zeros(1, 752, 2)],
+                dim=1),
             device=device_box.get(),
             dtype=ttnn.bfloat16,
         )
@@ -69,7 +70,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
             for i in range(6)
         ]
         weight_hash_config_case = ttnn.BilinearWeightHashConfig(
-            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG
+            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, 
+            memory_config=ttnn.DRAM_MEMORY_CONFIG
         )
         self.bilinear_weight_hash = ttnn.bos_create_bilinear_hash(device_box.get(), **weight_hash_config_case)
 
@@ -146,10 +148,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
             transpose_b=True,
         )
 
-        # 4, 4, 1, 6, 10_000
-        reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3), memory_config=ttnn.L1_MEMORY_CONFIG)
+        reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3))
         # ref_z = reference_points_cam[:, 2:3]
-        # 4, 1, 1, 6, 10_000
         ref_z = ttnn.slice(reference_points_cam, [0, 2, 0, 0, 0], [4, 3, 1, 6, 10_752], memory_config=ttnn.L1_MEMORY_CONFIG)
 
         eps = 1e-5
@@ -232,7 +232,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         hybird_ref_2d = ttnn.to_layout(hybird_ref_2d, ttnn.ROW_MAJOR_LAYOUT)
 
         # 10_000, 2, 2
-        hybird_ref_2d = ttnn.permute(hybird_ref_2d, (1, 0, 2))
+        hybird_ref_2d = ttnn.permute(hybird_ref_2d, (1, 0, 2), memory_config=ttnn.L1_MEMORY_CONFIG)
         hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 4))  # 10_000, 2, 8
         hybird_ref_2d = ttnn.reshape(hybird_ref_2d, (1, 10_752, 16))
         hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 8))   # 1, 10_000, 128
@@ -245,11 +245,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
         groups = {(1, 2): [], (4, 5): []}
         reference_points_rebatch_lst = []
 
-        for i in range(bev_mask_sums.shape[0]):
-            reference_points_rebatch = ttnn.clone(
-                self.reference_points_rebatch_zeros[i], 
-                memory_config=ttnn.L1_MEMORY_CONFIG
-            )
+        for i in range(bev_mask.shape[0]):
+            reference_points_rebatch = ttnn.clone(self.reference_points_rebatch_zeros[i], memory_config=ttnn.L1_MEMORY_CONFIG)
             _, indices = ttnn.bos_nonzero(
                 ttnn.to_layout(bev_mask_sums[i], ttnn.ROW_MAJOR_LAYOUT),
                 max_length=self.max_len[i],
@@ -263,7 +260,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
             reference_points_rebatch = ttnn.multiply_(reference_points_rebatch, self.ref_3d_denormalizer[i])
             reference_points_rebatch = ttnn.sub_(reference_points_rebatch, 0.5)
             reference_points_rebatch = ttnn.repeat(
-                reference_points_rebatch, (1, 1, 16), 
+                reference_points_rebatch, (1, 1, 16),
                 memory_config=ttnn.L1_MEMORY_CONFIG
             )
             reference_points_rebatch_lst.append(reference_points_rebatch)
@@ -303,6 +300,11 @@ class BEVFormerEncoder(TransformerLayerSequence):
         groups = [[0], [1, 2], [3], [4, 5]]
         value_spatial = [value[group[0] : group[-1] + 1] for group in groups]
         ttnn.deallocate(value)
+        bilinear_weight_hash = ttnn.clone(
+            self.bilinear_weight_hash, 
+            memory_config=ttnn.L1_MEMORY_CONFIG
+        )
+
         for lid, layer in enumerate(self.layers):
             output = layer(
                 bev_query,
@@ -322,7 +324,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 program_config=program_config,
                 indexes=indexes,
                 count=count,
-                bilinear_weight_hash=self.bilinear_weight_hash,
+                bilinear_weight_hash=bilinear_weight_hash,
                 **kwargs,
             )
 
@@ -403,6 +405,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         attn_masks=None,
         query_key_padding_mask=None,
         key_padding_mask=None,
+        padding_attn_mask=None,
         ref_2d=None,
         ref_3d=None,
         reference_points_cam=None,
@@ -418,6 +421,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         value_spatial=None,
         **kwargs,
     ):
+
         norm_index, attn_index, ffn_index = 0, 0, 0
         identity = query
 
@@ -450,6 +454,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     bilinear_weight_hash=bilinear_weight_hash,
                     memory_config=memory_config["self_attn"],
                     program_config=program_config["self_attn"],
+                    padding_attn_mask=padding_attn_mask,
                     **kwargs,
                 )
                 attn_index += 1
@@ -487,6 +492,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                 )
                 attn_index += 1
                 identity = query
+
             elif layer == "ffn":
                 query = self.ffns[ffn_index](
                     query,

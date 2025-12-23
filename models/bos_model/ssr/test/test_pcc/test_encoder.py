@@ -51,6 +51,7 @@ def device():
     """Open a Tenstorrent device for the whole test session, close at teardown."""
     device_box.open(enable_program_cache=True)           # default device_id = 0
     dev = device_box.get()
+    # ttnn.device.EnablePersistentKernelCache()
     yield dev
     device_box.close()
 
@@ -111,7 +112,9 @@ def random_inputs(device):
     )
 
     # ------------------- TT-NN tensors ------------------------------------ #
-    bev_query   = pt2tt(ref_bev_query.permute(1, 0, 2),
+    bev_query   = pt2tt(
+                    torch.concat([ref_bev_query, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
+                    # ref_bev_query.permute(1, 0, 2),
                     memory_config=ttnn.DRAM_MEMORY_CONFIG,
                     # memory_config= op.ShardedMemConfig(
                     #     (320, 256), (5, 4), 'height', 
@@ -123,7 +126,9 @@ def random_inputs(device):
     value    = pt2tt(ref_key.permute(2, 0, 1, 3),   # B, C, T, D
                     memory_config=ttnn.DRAM_MEMORY_CONFIG,
                     device=device)
-    bev_pos = pt2tt(ref_bev_pos.permute(1, 0, 2),
+    bev_pos = pt2tt(
+                    torch.concat([ref_bev_pos, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
+                    # ref_bev_pos.permute(1, 0, 2),
                     memory_config=ttnn.DRAM_MEMORY_CONFIG,
                     device=device)
     shift = pt2tt(ref_shift,
@@ -212,8 +217,10 @@ def test_encoder(device):
     # Load processed state dict
     state_dict = engine.ModelProcessor(ref_model).process_state_dict(**ref_input)
     model.load_state_dict(state_dict, strict=False)
-    model.reference_points = pt2tt(ref_model.reference_points, device=device)
-    model.reference_points = ttnn.squeeze(model.reference_points, -1)
+    model.reference_points = pt2tt(
+        torch.concat([ref_model.reference_points.squeeze(-1), torch.zeros(4, 1, 6, 752, 4)], dim=3),
+        device=device)
+    # model.reference_points = ttnn.squeeze(model.reference_points, -1)
 
     # ------------------- L1 Optimization ---------------------------------- #
     import math
@@ -221,23 +228,47 @@ def test_encoder(device):
     program_config = MyDict({
         "self_attn": MyDict({
             "value_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                compute_with_storage_grid_size=(5, 4),
+                compute_with_storage_grid_size=(8, 6),
                 in0_block_w=8,
                 out_subblock_h=1,
-                out_subblock_w=1,
-                per_core_M=math.ceil(BEV_H * BEV_W / 20 / 32) * 2,
+                out_subblock_w=8,
+                per_core_M=math.ceil(10_752 / 48 / 32) * 2,
                 # per_core_M=20,
                 per_core_N=8,
                 fuse_batch=True,
                 fused_activation=None,
                 mcast_in0=False,
             ), 
+            "attention_weights": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                compute_with_storage_grid_size=(8, 6),
+                in0_block_w=16,
+                out_subblock_h=1,
+                out_subblock_w=2,
+                per_core_M=math.ceil(10_752 / 48 / 32),
+                # per_core_M=20,
+                per_core_N=2,
+                fuse_batch=True,
+                fused_activation=None,
+                mcast_in0=False,
+            ), 
+            "sampling_offsets": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
+                compute_with_storage_grid_size=(8, 6),
+                in0_block_w=16,
+                out_subblock_h=1,
+                out_subblock_w=4,
+                per_core_M=math.ceil(10_752 / 48 / 32),
+                # per_core_M=20,
+                per_core_N=4,
+                fuse_batch=True,
+                fused_activation=None,
+                mcast_in0=False,
+            ), 
             "output_proj": ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                compute_with_storage_grid_size=(5, 4),
+                compute_with_storage_grid_size=(8, 6),
                 in0_block_w=8,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 20 / 32),
+                per_core_M=math.ceil(10_752 / 48 / 32),
                 # per_core_M=10,
                 per_core_N=8,
                 fuse_batch=True,
@@ -247,11 +278,11 @@ def test_encoder(device):
         }),
         "cross_attn": MyDict({
             "output_proj":ttnn.MatmulMultiCoreReuseMultiCast1DProgramConfig(
-                compute_with_storage_grid_size=(5, 4),
-                in0_block_w=4,
+                compute_with_storage_grid_size=(8, 6),
+                in0_block_w=8,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 20 / 32),
+                per_core_M=math.ceil(10_752 / 48 / 32),
                 # per_core_M=10,
                 per_core_N=8,
                 fuse_batch=True,
@@ -266,7 +297,7 @@ def test_encoder(device):
                 in0_block_w=8,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 48 / 32),
+                per_core_M=math.ceil(10_752 / 48 / 32),
                 # per_core_M=10,
                 per_core_N=16,
                 fuse_batch=True,
@@ -278,18 +309,18 @@ def test_encoder(device):
                 in0_block_w=16,
                 out_subblock_h=1,
                 out_subblock_w=8,
-                per_core_M=math.ceil(BEV_H * BEV_W / 48 / 32),
+                per_core_M=math.ceil(10_752 / 48 / 32),
                 # per_core_M=10,
                 per_core_N=8,
                 fuse_batch=True,
                 fused_activation=None,
                 mcast_in0=False,
             ),
-        })
+        }),
     })
     memory_config = MyDict({
         "bev_query": op.ShardedMemConfig(
-            # shape=(224, 256),
+            # shape=(512, 256),
             shape=(math.ceil(BEV_H * BEV_W / 48 / 32) * 32, 256),
             # shape=(320, 256),
             core_grid=(8, 6),
@@ -297,6 +328,27 @@ def test_encoder(device):
             as_shard_shape=True
         ),
         "self_attn": MyDict({
+            "query": op.ShardedMemConfig(
+                # (224, 512), 
+                (math.ceil(10_752 / 48 / 32) * 32, 512),
+                core_grid=(8, 6), 
+                strategy="height", 
+                as_shard_shape=True
+            ),
+            "attention_weights": op.ShardedMemConfig(
+                # (224, 64), 
+                (math.ceil(10_752 / 48 / 32) * 32, 64),
+                core_grid=(8, 6), 
+                strategy="height", 
+                as_shard_shape=True
+            ),
+            "sampling_offsets": op.ShardedMemConfig(
+                # (224, 128), 
+                (math.ceil(10_752 / 48 / 32) * 32, 128),
+                core_grid=(8, 6), 
+                strategy="height", 
+                as_shard_shape=True
+            ),
             "value": op.ShardedMemConfig(
                 # (640, 256), 
                 (math.ceil(BEV_H * BEV_W / 48 / 32) * 32 * 2, 256),
@@ -304,7 +356,7 @@ def test_encoder(device):
                 "height", 
                 as_shard_shape=True
             ),
-            "value_proj": ttnn.DRAM_MEMORY_CONFIG,
+            "value_proj": ttnn.L1_MEMORY_CONFIG,
             "output_proj": ttnn.L1_HEIGHT_SHARDED_MEMORY_CONFIG,
         }),
         "cross_attn": MyDict({
@@ -314,15 +366,18 @@ def test_encoder(device):
     })
 
     # ------------------- Forward passes ----------------------------------- #
-    tt_out  = model(**tt_input, memory_config=memory_config, program_config=program_config)
     ref_out = ref_model(**ref_input)
+    import tracy
+    # tracy.signpost("encoder runtime")
+    tt_out  = model(**tt_input, memory_config=memory_config, program_config=program_config)
+    # breakpoint()
     ttnn.synchronize_device(device)
     compare_tensors(ref_out, tt_out)
 
     # ------------------- Assertions --------------------------------------- #
     ref_out = ref_model(**ref_input)
-    assert ref_out.shape == tt_out.shape, "Output shape mismatch"
-    passed, _ = compare_tensors(ref_out, tt_out, pcc_thresh=0.98)
+    # assert ref_out.shape == tt_out.shape, "Output shape mismatch"
+    passed, _ = compare_tensors(ref_out, tt2pt(tt_out)[:, :10_000], pcc_thresh=0.98)
     assert passed, f"PCC below threshold"
     # ttnn.deallocate(tt_out)
     breakpoint()
@@ -338,9 +393,12 @@ def test_encoder(device):
         print('#', '-' * 50)
         st = time.time()
         tt_out = model(**tt_input, memory_config=memory_config, program_config=program_config)
+        ttnn.device.ReadDeviceProfiler(device)
+        tracy.signpost("encoder runtime")
         ttnn.synchronize_device(device)
+        breakpoint()
         en = time.time()
-        compare_tensors(ref_out, tt_out)
+        compare_tensors(ref_out, tt2pt(tt_out)[:, :10_000])
         print('#', '-' * 50)
         # ttnn.deallocate(tt_out)
         avg_exec_time = (en - st) * 1000 # in ms

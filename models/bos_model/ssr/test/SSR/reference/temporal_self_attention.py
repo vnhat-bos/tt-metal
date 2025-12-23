@@ -16,6 +16,7 @@ ext_module = ext_loader.load_ext(
 
 @ATTENTION.register_module(force=True)
 class TemporalSelfAttention(BaseModule):
+    counter = 0
     """An attention module used in BEVFormer based on Deformable-Detr.
 
     `Deformable DETR: Deformable Transformers for End-to-End Object Detection.
@@ -165,7 +166,10 @@ class TemporalSelfAttention(BaseModule):
         assert self.num_bev_queue == 2
 
         query = torch.cat([value[:bs], query], -1)
+        torch.save(value, f"/tmp/value.{TemporalSelfAttention.counter}.pt")
         value = self.value_proj(value)
+        torch.save(value, f"/tmp/value_proj.{TemporalSelfAttention.counter}.pt")
+        torch.save(query, f"/tmp/query.{TemporalSelfAttention.counter}.pt")
 
         if key_padding_mask is not None:
             value = value.masked_fill(key_padding_mask[..., None], 0.0)
@@ -174,11 +178,15 @@ class TemporalSelfAttention(BaseModule):
                               num_value, self.num_heads, -1)
 
         sampling_offsets = self.sampling_offsets(query)
+        torch.save(sampling_offsets, f"/tmp/sampling_offsets.{TemporalSelfAttention.counter}.0.pt")
         sampling_offsets = sampling_offsets.view(
             bs, num_query, self.num_heads,  self.num_bev_queue, self.num_levels, self.num_points, 2)
+        torch.save(sampling_offsets, f"/tmp/sampling_offsets.{TemporalSelfAttention.counter}.1.pt")
         attention_weights = self.attention_weights(query).view(
             bs, num_query,  self.num_heads, self.num_bev_queue, self.num_levels * self.num_points)
+        torch.save(attention_weights, f"/tmp/attention_weights.{TemporalSelfAttention.counter}.pt")
         attention_weights = attention_weights.softmax(-1)
+        torch.save(attention_weights, f"/tmp/attention_weights_softmax.{TemporalSelfAttention.counter}.pt")
 
         attention_weights = attention_weights.view(bs, num_query,
                                                    self.num_heads,
@@ -197,6 +205,7 @@ class TemporalSelfAttention(BaseModule):
             sampling_locations = reference_points[:, :, None, :, None, :] \
                 + sampling_offsets \
                 / offset_normalizer[None, None, None, :, None, :]
+            torch.save(sampling_locations, f"/tmp/sampling_locations.{TemporalSelfAttention.counter}.pt")
 
         elif reference_points.shape[-1] == 4:
             sampling_locations = reference_points[:, :, None, :, None, :2] \
@@ -221,6 +230,7 @@ class TemporalSelfAttention(BaseModule):
 
             output = multi_scale_deformable_attn_pytorch(
                 value, spatial_shapes, sampling_locations, attention_weights)
+            torch.save(output, f"/tmp/output.{TemporalSelfAttention.counter}.pt")
 
         # output shape (bs*num_bev_queue, num_query, embed_dims)
         # (bs*num_bev_queue, num_query, embed_dims)-> (num_query, embed_dims, bs*num_bev_queue)
@@ -230,13 +240,16 @@ class TemporalSelfAttention(BaseModule):
         # (num_query, embed_dims, bs*num_bev_queue)-> (num_query, embed_dims, bs, num_bev_queue)
         output = output.view(num_query, embed_dims, bs, self.num_bev_queue)
         output = output.mean(-1)
+        torch.save(output, f"/tmp/output_mean.{TemporalSelfAttention.counter}.pt")
 
         # (num_query, embed_dims, bs)-> (bs, num_query, embed_dims)
         output = output.permute(2, 0, 1)
 
         output = self.output_proj(output)
+        torch.save(output, f"/tmp/output_proj.{TemporalSelfAttention.counter}.pt")
 
         if not self.batch_first:
             output = output.permute(1, 0, 2)
-
+        
+        TemporalSelfAttention.counter += 1
         return self.dropout(output) + identity

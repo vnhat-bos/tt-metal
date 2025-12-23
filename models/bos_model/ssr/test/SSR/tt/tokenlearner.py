@@ -73,6 +73,7 @@ class TokenLearnerV11(op.BaseModule):
         selected = self.mlp(selected, memory_config=memory_config, program_config=program_config)
 
         selected = ttnn.sharded_to_interleaved(selected, ttnn.L1_MEMORY_CONFIG)
+        selected = selected[:, :, :10_000]
         # I think ttnn.softmax is reverted to V62, so I followed old version's implementation
         selected = ttnn.reshape(selected, (inputs.shape[0], self.num_tokens, -1), memory_config=ttnn.L1_MEMORY_CONFIG)
         selected = ttnn.permute(selected, (0, 2, 1))
@@ -85,7 +86,7 @@ class TokenLearnerV11(op.BaseModule):
 
         outputs = ttnn.matmul(
             selected,
-            feat,  # [1, 16, 10000] @ [1, 10000, 512] = [1, 16, 512]
+            feat[:, :10_000],  # [1, 16, 10000] @ [1, 10000, 512] = [1, 16, 512]
         )
 
         return outputs

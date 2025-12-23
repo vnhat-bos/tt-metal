@@ -272,13 +272,13 @@ class SSRHead(nn.Module):
         # TODO: Concat causes hanging with 2 HEIGHT sharded tensors (with TILE layout)
         bev_query = ttnn.concat(
             [
-                ttnn.sharded_to_interleaved(bev_navi_embed, memory_config=ttnn.L1_MEMORY_CONFIG),
-                ttnn.unsqueeze(ttnn.to_memory_config(self.transformer.bev_pos, ttnn.L1_MEMORY_CONFIG), 0)
+                bev_navi_embed,
+                ttnn.unsqueeze(ttnn.to_memory_config(self.transformer.bev_pos, bev_navi_embed.memory_config()), 0)
             ], dim=-1, 
-            # memory_config=memory_config["concat"]["out_concat"].value
+            memory_config=memory_config["concat"]["out_concat"].value
         )
         ttnn.deallocate(bev_navi_embed)
-        # bev_query = ttnn.sharded_to_interleaved(bev_query, memory_config=ttnn.L1_MEMORY_CONFIG)
+        bev_query = ttnn.sharded_to_interleaved(bev_query, memory_config=ttnn.L1_MEMORY_CONFIG)
         # bev_query = ttnn.sharded_to_interleaved(bev_query)
         # bev_query = ttnn.reallocate(bev_query, bev_query.memory_config())
 
