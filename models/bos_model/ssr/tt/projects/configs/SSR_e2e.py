@@ -1,4 +1,5 @@
 import ttnn
+import os
 
 _base_ = [
     './custom_nus-3d.py',
@@ -269,7 +270,7 @@ test_pipeline = [
     dict(type='LoadAnnotations3D', with_bbox_3d=True, with_label_3d=True, with_attr_label=True),
     dict(type='CustomObjectRangeFilter', point_cloud_range=point_cloud_range),
     dict(type='CustomObjectNameFilter', classes=class_names),
-    dict(type='NormalizeMultiviewImage', **img_norm_cfg),
+    # dict(type='NormalizeMultiviewImage', **img_norm_cfg),
     # dict(type='PadMultiViewImage', size_divisor=32),
     dict(
         type='MultiScaleFlipAug3D',
@@ -278,6 +279,7 @@ test_pipeline = [
         flip=False,
         transforms=[
             dict(type='RandomScaleImageMultiViewImage', scales=[0.4]),
+            dict(type='NormalizeMultiviewImage', **img_norm_cfg),
             dict(type='PadMultiViewImage', size_divisor=32),
             dict(type='CustomDefaultFormatBundle3D', class_names=class_names, with_label=False, with_ego=True),
             dict(type='CustomCollect3D',\
@@ -288,7 +290,7 @@ test_pipeline = [
 
 data = dict(
     samples_per_gpu=1,
-    workers_per_gpu=4,
+    workers_per_gpu=min(max(1, os.cpu_count() // 2), 16), # limit the number of workers to 16 at most
     train=dict(
         type=dataset_type,
         data_root=data_root,
