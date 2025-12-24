@@ -170,7 +170,7 @@ def setup_l1_sharded_config(ttnn_host_input, device):
     mem_config = ttnn.create_sharded_memory_config(
         shape=(
             divup(ttnn_host_input.volume() // ttnn_host_input.padded_shape[-1], l1_grid_size.x * l1_grid_size.y),
-            align(ttnn_host_input.padded_shape[-1]),
+            align(ttnn_host_input.shape[-1]),
         ),
         core_grid=ttnn.CoreGrid(x=l1_grid_size.x, y=l1_grid_size.y),
         strategy=ttnn.ShardStrategy.HEIGHT,
