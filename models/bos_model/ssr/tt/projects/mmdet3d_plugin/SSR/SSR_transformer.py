@@ -1,24 +1,19 @@
-import math
 import logging
-import torch
+import math
 
-import ttnn
 import numpy as np
+import torch
 import torch.nn as nn
-
+from bos_metal import device_box, op
+from mmcv.cnn.bricks.registry import TRANSFORMER_LAYER_SEQUENCE
+from mmcv.cnn.bricks.transformer import TransformerLayerSequence, build_transformer_layer_sequence
 from mmcv.runner.base_module import BaseModule
 from mmdet.models.utils.builder import TRANSFORMER
-from mmcv.cnn.bricks.transformer import (
-    build_transformer_layer_sequence,
-    TransformerLayerSequence,
-)
-from mmcv.cnn.bricks.registry import TRANSFORMER_LAYER_SEQUENCE
-
-from bos_metal import op, device_box
-
-from .utils import pt2tt, ReLU
 from tt.projects.configs.ops_config import MyDict
 
+import ttnn
+
+from .utils import ReLU, pt2tt
 
 logger = logging.getLogger(__name__)
 
@@ -67,14 +62,6 @@ class SSRPerceptionTransformer(BaseModule):
         self.rotate_center = rotate_center
         self.init_layers()
 
-        self.spatial_shapes = ttnn.Tensor(
-            data=[12, 20],
-            data_type=ttnn.bfloat16,
-            shape=[1, 1, 1, 2],
-            layout=ttnn.ROW_MAJOR_LAYOUT,
-            device=device_box.get(),
-        ).reshape([1, 2])
-
     def convert_torch_embeds(
         self,
         bev_queries=None,
@@ -89,11 +76,11 @@ class SSRPerceptionTransformer(BaseModule):
         if isinstance(bev_queries, torch.Tensor):
             bev_queries, bev_pos, cams_embeds, level_embeds, reference_points = pt2tt(
                 [
-                    bev_queries.permute(1, 0, 2),
-                    bev_pos.permute(1, 0, 2),
+                    torch.concat([bev_queries, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
+                    torch.concat([bev_pos, torch.zeros(752, 1, 256)], dim=0).permute(1, 0, 2),
                     cams_embeds,
                     level_embeds,
-                    reference_points,
+                    torch.concat([reference_points.squeeze(-1), torch.zeros(4, 1, 6, 752, 4)], dim=3),
                 ],
                 device=device_box.get(),
                 memory_config=memory_config,
@@ -112,7 +99,6 @@ class SSRPerceptionTransformer(BaseModule):
         self.reference_points = op.Linear(self.embed_dims, 3)
         self.map_reference_points = op.Linear(self.embed_dims, 2)
 
-        # TODO: Fuse activation function into Linear layers
         self.can_bus_mlp = nn.Sequential(
             op.Linear(18, self.embed_dims // 2),
             ReLU(inplace=True),
@@ -132,7 +118,7 @@ class SSRPerceptionTransformer(BaseModule):
         memory_config=MyDict(),
         program_config=MyDict(),
         debug=False,
-        **kwargs
+        **kwargs,
     ):
         """
         obtain bev features.
@@ -140,26 +126,20 @@ class SSRPerceptionTransformer(BaseModule):
 
         bs = mlvl_feats.shape[0]
 
-        # obtain rotation angle and shift with ego motion    
-        delta_x = ttnn.concat([each['can_bus'][0] for each in kwargs["img_metas"]], 0)
+        # obtain rotation angle and shift with ego motion
+        delta_x = ttnn.concat([each["can_bus"][0] for each in kwargs["img_metas"]], 0)
         delta_x = ttnn.to_layout(delta_x, ttnn.Layout.TILE, memory_config=ttnn.L1_MEMORY_CONFIG)
-        delta_y = ttnn.concat([each['can_bus'][1] for each in kwargs["img_metas"]], 0)
+        delta_y = ttnn.concat([each["can_bus"][1] for each in kwargs["img_metas"]], 0)
         delta_y = ttnn.to_layout(delta_y, ttnn.Layout.TILE, memory_config=ttnn.L1_MEMORY_CONFIG)
-        ego_angle = ttnn.concat([each['can_bus'][-2] for each in kwargs["img_metas"]], 0)
+        ego_angle = ttnn.concat([each["can_bus"][-2] for each in kwargs["img_metas"]], 0)
         ego_angle = ttnn.to_layout(ego_angle, ttnn.Layout.TILE, memory_config=ttnn.L1_MEMORY_CONFIG)
         ego_angle = ttnn.div(ego_angle, math.pi)
         ego_angle = ttnn.mul(ego_angle, 180.0)
-        
+
         grid_length_y = grid_length[0]
         grid_length_x = grid_length[1]
-        translation_length = ttnn.sqrt(
-            ttnn.square(delta_x) +
-            ttnn.square(delta_y)
-        )
-        translation_angle = ttnn.div(
-            ttnn.atan2(delta_y, delta_x), 
-            math.pi
-        )
+        translation_length = ttnn.sqrt(ttnn.square(delta_x) + ttnn.square(delta_y))
+        translation_angle = ttnn.div(ttnn.atan2(delta_y, delta_x), math.pi)
         ttnn.deallocate(delta_x)
         ttnn.deallocate(delta_y)
         translation_angle = ttnn.mul(translation_angle, 180.0)
@@ -209,13 +189,12 @@ class SSRPerceptionTransformer(BaseModule):
             bev_h=bev_h,
             bev_w=bev_w,
             bev_pos=self.bev_pos,
-            spatial_shapes=self.spatial_shapes,
             prev_bev=prev_bev,
             shift=shift,
             memory_config=memory_config["encoder"],
             program_config=program_config["encoder"],
             debug=debug,
-            **kwargs
+            **kwargs,
         )
 
         return bev_embed
