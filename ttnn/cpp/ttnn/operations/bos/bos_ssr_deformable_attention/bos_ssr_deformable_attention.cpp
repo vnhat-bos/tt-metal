@@ -102,25 +102,34 @@ namespace ttnn::operations::bos::bos_ssr_deformable_attention {
         ttnn::SmallVector<uint32_t> begins = {0, 0};
         ttnn::SmallVector<uint32_t> ends = {num_levels_, 1};
         ttnn::SmallVector<uint32_t> steps = {1, 1};
-        Tensor in_height = ttnn::slice(spatial_shapes, begins, ends, steps);
+        const bool user_provided_flipped_spatial_shapes =
+            spatial_shape[0] == 32 && spatial_shape[1] == 32;
+        bool should_deallocate_flipped_spatial_shapes = !user_provided_flipped_spatial_shapes;
+        Tensor flipped_spatial_shapes;
 
-        begins = {0, 1};
-        ends = {num_levels_, 2};
-        steps = {1, 1};
-        Tensor in_width = ttnn::slice(spatial_shapes, begins, ends, steps);
+        if (user_provided_flipped_spatial_shapes) {
+            flipped_spatial_shapes = spatial_shapes;
+        } else {
+            Tensor in_height = ttnn::slice(spatial_shapes, begins, ends, steps);
 
-        Tensor flipped_spatial_shapes = ttnn::concat(std::vector<ttnn::Tensor>({in_width, in_height}), 1);
-        in_height.deallocate();
-        in_width.deallocate();
+            begins = {0, 1};
+            ends = {num_levels_, 2};
+            steps = {1, 1};
+            Tensor in_width = ttnn::slice(spatial_shapes, begins, ends, steps);
 
-        logical_shape = ttnn::Shape({1, num_levels_ * spatial_shape[1]});  // (1,L2)  
-        padded_shape  = ttnn::Shape({32, round_up_to_mul32(num_levels_  * spatial_shape[1])});
-        flipped_spatial_shapes = ttnn::reshape(flipped_spatial_shapes, logical_shape, padded_shape);  
-        
-        uint32_t repeat_factor = 32 / (num_levels_ * spatial_shape[1]); 
-        auto repeats = ttnn::Shape({32, repeat_factor});
-        // manually padded both dim to 32x32 to compute later
-        flipped_spatial_shapes = ttnn::repeat(flipped_spatial_shapes, repeats);
+            flipped_spatial_shapes = ttnn::concat(std::vector<ttnn::Tensor>({in_width, in_height}), 1);
+            in_height.deallocate();
+            in_width.deallocate();
+
+            logical_shape = ttnn::Shape({1, num_levels_ * spatial_shape[1]});  // (1,L2)
+            padded_shape  = ttnn::Shape({32, round_up_to_mul32(num_levels_  * spatial_shape[1])});
+            flipped_spatial_shapes = ttnn::reshape(flipped_spatial_shapes, logical_shape, padded_shape);
+
+            uint32_t repeat_factor = 32 / (num_levels_ * spatial_shape[1]);
+            auto repeats = ttnn::Shape({32, repeat_factor});
+            // manually padded both dim to 32x32 to compute later
+            flipped_spatial_shapes = ttnn::repeat(flipped_spatial_shapes, repeats);
+        }
 
         // should not be reshaped here
         logical_shape = attention_weights.logical_shape();
@@ -186,7 +195,9 @@ namespace ttnn::operations::bos::bos_ssr_deformable_attention {
                     ).at(0);
 
         sampling_locations_.deallocate();
-        flipped_spatial_shapes.deallocate();
+        if (should_deallocate_flipped_spatial_shapes) {
+            flipped_spatial_shapes.deallocate();
+        }
         attention_weights_.deallocate();
 
         auto output_shape = output.logical_shape();

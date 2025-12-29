@@ -24,24 +24,18 @@ import logging
 
 import torch
 import torch.nn as nn
+from bos_metal import device_box, op
+from bos_metal.operations import MyDict
 from mmcv.cnn.bricks import build_activation_layer
-from mmcv.cnn.bricks.transformer import (
-    build_positional_encoding,
-    build_transformer_layer_sequence,
-)
+from mmcv.cnn.bricks.transformer import build_positional_encoding, build_transformer_layer_sequence
 from mmdet.models import HEADS, build_loss
 from mmdet.models.utils import build_transformer
-
-from bos_metal import device_box, op
+from tt.projects.mmdet3d_plugin.SSR.modules.tokenlearner import TokenLearnerV11
 from tt.projects.mmdet3d_plugin.SSR.utils.builder import build_bbox_coder
-from tt.projects.configs.ops_config import MyDict
-from mmcv.cnn.bricks.transformer import build_transformer_layer_sequence
+
 import ttnn
 
-from tt.projects.mmdet3d_plugin.SSR.modules.tokenlearner import TokenLearnerV11
-
-from bos_metal import op, device_box
-from .utils import tt2pt, pt2tt, ReLU, Sigmoid
+from .utils import ReLU, Sigmoid, pt2tt, tt2pt
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +61,7 @@ class SELayer(op.BaseModule):
             memory_config=memory_config["mlp_expand"].value,
             program_config=program_config["mlp_expand"].value,
         )
-        
+
         if inplace:
             return ttnn.multiply_(x, self.gate(x_se))
         else:
@@ -252,15 +246,15 @@ class SSRHead(nn.Module):
                 break
 
         x_se = ttnn.to_memory_config(
-            self.navi_embd[cmd_idx : cmd_idx + 1], 
-            memory_config=memory_config["navi_se"]["x_se"].value
+            self.navi_embd[cmd_idx : cmd_idx + 1], memory_config=memory_config["navi_se"]["x_se"].value
         )
         bev_embed_out = ttnn.to_memory_config(bev_embed, ttnn.DRAM_MEMORY_CONFIG)
         bev_navi_embed = self.navi_se(
-            bev_embed, x_se,
+            bev_embed,
+            x_se,
             memory_config=memory_config["navi_se"],
             program_config=program_config["navi_se"],
-            inplace=True
+            inplace=True,
         )
         ttnn.deallocate(x_se)
 
@@ -269,23 +263,21 @@ class SSRHead(nn.Module):
         #     memory_config=memory_config["concat"]["bev_pos"].value
         # )
         bev_navi_embed = ttnn.unsqueeze(bev_navi_embed, 0)
-        # TODO: Concat causes hanging with 2 HEIGHT sharded tensors (with TILE layout)
         bev_query = ttnn.concat(
             [
-                ttnn.sharded_to_interleaved(bev_navi_embed, memory_config=ttnn.L1_MEMORY_CONFIG),
-                ttnn.unsqueeze(ttnn.to_memory_config(self.transformer.bev_pos, ttnn.L1_MEMORY_CONFIG), 0)
-            ], dim=-1, 
-            # memory_config=memory_config["concat"]["out_concat"].value
+                bev_navi_embed,
+                ttnn.unsqueeze(ttnn.to_memory_config(self.transformer.bev_pos, bev_navi_embed.memory_config()), 0),
+            ],
+            dim=-1,
+            memory_config=memory_config["concat"]["out_concat"].value,
         )
         ttnn.deallocate(bev_navi_embed)
-        # bev_query = ttnn.sharded_to_interleaved(bev_query, memory_config=ttnn.L1_MEMORY_CONFIG)
+        bev_query = ttnn.sharded_to_interleaved(bev_query, memory_config=ttnn.L1_MEMORY_CONFIG)
         # bev_query = ttnn.sharded_to_interleaved(bev_query)
         # bev_query = ttnn.reallocate(bev_query, bev_query.memory_config())
 
         learned_latent_query = self.tokenlearner(
-            bev_query,
-            memory_config=memory_config["tokenlearner"],
-            program_config=program_config["tokenlearner"]
+            bev_query, memory_config=memory_config["tokenlearner"], program_config=program_config["tokenlearner"]
         )
         ttnn.deallocate(bev_query)
 
@@ -331,11 +323,10 @@ class SSRHead(nn.Module):
 
         outs = {
             "bev_embed": bev_embed_out,
-            "scene_query": latent_query,
+            # "scene_query": tt2pt(latent_query, torch.float32).as_subclass(torch.Tensor),
             # 'act_query': act_query,
             # 'act_pos': act_pos,
             "ego_fut_preds": outputs_ego_trajs,
         }
 
         return outs
-
