@@ -67,14 +67,6 @@ class SSRPerceptionTransformer(BaseModule):
         self.rotate_center = rotate_center
         self.init_layers()
 
-        self.spatial_shapes = ttnn.Tensor(
-            data=[12, 20],
-            data_type=ttnn.bfloat16,
-            shape=[1, 1, 1, 2],
-            layout=ttnn.ROW_MAJOR_LAYOUT,
-            device=device_box.get(),
-        ).reshape([1, 2])
-
     def convert_torch_embeds(
         self,
         bev_queries=None,
@@ -208,7 +200,6 @@ class SSRPerceptionTransformer(BaseModule):
             bev_h=bev_h,
             bev_w=bev_w,
             bev_pos=self.bev_pos,
-            spatial_shapes=self.spatial_shapes,
             prev_bev=prev_bev,
             shift=shift,
             memory_config=memory_config["encoder"],

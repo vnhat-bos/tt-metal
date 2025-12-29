@@ -75,6 +75,20 @@ class BEVFormerEncoder(TransformerLayerSequence):
         )
         self.bilinear_weight_hash = ttnn.bos_create_bilinear_hash(device_box.get(), **weight_hash_config_case)
 
+        self.temporal_spatial_shapes = pt2tt(
+            torch.full((32, 32), 100.),
+            layout=ttnn.TILE_LAYOUT,
+            device=device_box.get(),
+            memory_config=ttnn.L1_MEMORY_CONFIG
+        )
+        self.spatial_spatial_shapes = pt2tt(
+            torch.tensor([[20., 12.]]).repeat(32, 16),
+            layout=ttnn.TILE_LAYOUT,
+            device=device_box.get(),
+            memory_config=ttnn.L1_MEMORY_CONFIG
+        )
+
+
     @staticmethod
     def get_reference_points(
         H,
@@ -314,7 +328,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 ref_2d=hybird_ref_2d,
                 bev_h=bev_h,
                 bev_w=bev_w,
-                spatial_shapes=spatial_shapes,
+                temporal_spatial_shapes=self.temporal_spatial_shapes,
+                spatial_spatial_shapes=self.spatial_spatial_shapes,
                 level_start_index=level_start_index,
                 reference_points_rebatch=reference_points_rebatch_lst,
                 bev_mask=bev_mask,
@@ -385,14 +400,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         assert len(operation_order) == 6
         assert set(operation_order) == set(["self_attn", "norm", "cross_attn", "ffn"])
 
-        self.temporal_spatial_shapes = ttnn.Tensor(
-            data=[100, 100],
-            data_type=ttnn.bfloat16,
-            shape=[1, 1, 1, 2],
-            layout=ttnn.ROW_MAJOR_LAYOUT,
-            device=device_box.get(),
-        ).reshape([1, 2])
-
     def forward(
         self,
         query,
@@ -410,7 +417,8 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         reference_points_cam=None,
         reference_points_rebatch=None,
         mask=None,
-        spatial_shapes=None,
+        temporal_spatial_shapes=None,
+        spatial_spatial_shapes=None,
         prev_bev=None,
         bilinear_weight_hash=None,
         memory_config=MyDict(),
@@ -449,7 +457,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     key_pos=bev_pos,
                     key_padding_mask=query_key_padding_mask,
                     reference_points=ref_2d,
-                    spatial_shapes=self.temporal_spatial_shapes,
+                    spatial_shapes=temporal_spatial_shapes,
                     bilinear_weight_hash=bilinear_weight_hash,
                     memory_config=memory_config["self_attn"],
                     program_config=program_config["self_attn"],
@@ -481,7 +489,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     query_pos=query_pos,
                     key_pos=key_pos,
                     reference_points_rebatch=reference_points_rebatch,
-                    spatial_shapes=spatial_shapes,
+                    spatial_shapes=spatial_spatial_shapes,
                     indexes=indexes,
                     count=count,
                     bilinear_weight_hash=bilinear_weight_hash,
