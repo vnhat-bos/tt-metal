@@ -2,13 +2,11 @@ from typing import Tuple, Union
 
 import torch
 import torch.nn as nn
-
 from bos_metal import ttnn
 from bos_metal.core import BaseModule
+from bos_metal.operations.binary import Add
 from bos_metal.operations.conv import Conv2d
 from bos_metal.operations.pool import MaxPool2d
-from bos_metal.operations.binary import Add
-
 from mmdet.models.builder import NECKS
 
 
