@@ -2,11 +2,11 @@ import copy
 import os
 import warnings
 from test.common import *
-from test.utils import compare_tensors, pt2tt, tt2pt
-from weakref import ref
+from test.utils import pt2tt
 
 import torch
 from bos_metal import device_box
+from bos_metal.operations import MyDict
 from mmcv.cnn.bricks.registry import TRANSFORMER_LAYER, TRANSFORMER_LAYER_SEQUENCE
 from mmcv.cnn.bricks.transformer import TransformerLayerSequence
 
@@ -35,7 +35,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
         dataset_type="nuscenes",
         bev_h=100,
         bev_w=100,
-        max_len=3_680,
         **kwargs,
     ):
 
@@ -45,17 +44,14 @@ class BEVFormerEncoder(TransformerLayerSequence):
         self.num_points_in_pillar = num_points_in_pillar
         self.pc_range = pc_range
         self.fp16_enabled = False
-        self.bev_h = bev_h
-        self.bev_w = bev_w
 
         self.max_len = [3_072, 1_376, 1_376, 3_680, 992, 992]
         # [3_072, 1_344, 1_376, 3_680, 928, 992]
 
         self.ref_2d = pt2tt(
-            torch.concat([
-                self.get_reference_points(bev_h, bev_w, dim="2d").view(1, 10_000, 2),
-                torch.zeros(1, 752, 2)],
-                dim=1),
+            torch.concat(
+                [self.get_reference_points(bev_h, bev_w, dim="2d").view(1, 10_000, 2), torch.zeros(1, 752, 2)], dim=1
+            ),
             device=device_box.get(),
             dtype=ttnn.bfloat16,
         )
@@ -70,24 +66,22 @@ class BEVFormerEncoder(TransformerLayerSequence):
             for i in range(6)
         ]
         weight_hash_config_case = ttnn.BilinearWeightHashConfig(
-            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, 
-            memory_config=ttnn.DRAM_MEMORY_CONFIG
+            step_x=100, step_y=100, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG
         )
         self.bilinear_weight_hash = ttnn.bos_create_bilinear_hash(device_box.get(), **weight_hash_config_case)
 
         self.temporal_spatial_shapes = pt2tt(
-            torch.full((32, 32), 100.),
+            torch.full((32, 32), 100.0),
             layout=ttnn.TILE_LAYOUT,
             device=device_box.get(),
-            memory_config=ttnn.L1_MEMORY_CONFIG
+            memory_config=ttnn.L1_MEMORY_CONFIG,
         )
         self.spatial_spatial_shapes = pt2tt(
-            torch.tensor([[20., 12.]]).repeat(32, 16),
+            torch.tensor([[20.0, 12.0]]).repeat(32, 16),
             layout=ttnn.TILE_LAYOUT,
             device=device_box.get(),
-            memory_config=ttnn.L1_MEMORY_CONFIG
+            memory_config=ttnn.L1_MEMORY_CONFIG,
         )
-
 
     @staticmethod
     def get_reference_points(
@@ -161,14 +155,14 @@ class BEVFormerEncoder(TransformerLayerSequence):
         )
 
         reference_points_cam = ttnn.permute(reference_points_cam, (0, 4, 1, 2, 3))
-        # ref_z = reference_points_cam[:, 2:3]
-        ref_z = ttnn.slice(reference_points_cam, [0, 2, 0, 0, 0], [4, 3, 1, 6, 10_752], memory_config=ttnn.L1_MEMORY_CONFIG)
+        ref_z = ttnn.slice(
+            reference_points_cam, [0, 2, 0, 0, 0], [4, 3, 1, 6, 10_752], memory_config=ttnn.L1_MEMORY_CONFIG
+        )
 
         eps = 1e-5
         bev_mask = ttnn.gt(ref_z, eps, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # broad-cast is potentially erroneous -> manually repeat
+        # NOTE: broad-cast is potentially erroneous -> manually repeat
         tmp = ttnn.maximum(ref_z, ttnn.full_like(ref_z, eps), output_tensor=ref_z)
-        # tmp = ttnn.repeat_interleave(tmp, 2, 1)
         reference_points_cam = ttnn.divide(reference_points_cam[:, 0:2], tmp, memory_config=ttnn.L1_MEMORY_CONFIG)
         tmp.deallocate()
 
@@ -177,7 +171,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
         reference_points_cam.deallocate()
 
         reference_points_cam = ttnn.concat([ref_x, ref_y], 1, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # reference_points_cam = ttnn.to_layout(reference_points_cam, ttnn.ROW_MAJOR_LAYOUT)
         reference_points_cam = ttnn.reshape(reference_points_cam, (8, 6, 10_752))
 
         bev_mask = ttnn.logical_and_(bev_mask, ttnn.gt(ref_x, 0.0))
@@ -188,10 +181,6 @@ class BEVFormerEncoder(TransformerLayerSequence):
         ref_y.deallocate()
 
         reference_points_cam = ttnn.permute(reference_points_cam, (1, 2, 0))
-        # reference_points_cam = ttnn.repeat(reference_points_cam, (1, 1, 16))
-
-        # bev_mask = torch.nan_to_num(bev_mask)
-
         bev_mask = ttnn.squeeze(ttnn.permute(bev_mask, (1, 3, 2, 4, 0)), 0)
 
         return reference_points_cam, bev_mask
@@ -238,43 +227,42 @@ class BEVFormerEncoder(TransformerLayerSequence):
             ttnn.deallocate(shift_ref_2d)
         else:
             hybird_ref_2d = ttnn.concat([self.ref_2d, self.ref_2d], 0, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # 2, 10_000, 2
+        # 2, 10_000[10_752], 2
         hybird_ref_2d = ttnn.multiply_(hybird_ref_2d, 100.0)
         hybird_ref_2d = ttnn.sub_(hybird_ref_2d, 0.5)
         hybird_ref_2d = ttnn.to_layout(hybird_ref_2d, ttnn.ROW_MAJOR_LAYOUT)
 
-        # 10_000, 2, 2
+        # 10_000[10_752], 2, 2
         hybird_ref_2d = ttnn.permute(hybird_ref_2d, (1, 0, 2), memory_config=ttnn.L1_MEMORY_CONFIG)
-        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 4))  # 10_000, 2, 8
+        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 4))  # 10_000[10_752], 2, 8
         hybird_ref_2d = ttnn.reshape(hybird_ref_2d, (1, 10_752, 16))
-        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 8))   # 1, 10_000, 128
+        hybird_ref_2d = ttnn.repeat(hybird_ref_2d, (1, 1, 8))  # 1, 10_000[10_752], 128
         # hybird_ref_2d = ttnn.to_layout(hybird_ref_2d, ttnn.TILE_LAYOUT)
 
         indexes = []
         bev_mask_sums = ttnn.sum(bev_mask, -1)
         ttnn.deallocate(bev_mask)
 
-        # TODO: Edit ttnn.nonzero to take in 6xN array instead of looping 6 times
         groups = {(1, 2): [], (4, 5): []}
         reference_points_rebatch_lst = []
 
         for i in range(bev_mask.shape[0]):
-            reference_points_rebatch = ttnn.clone(self.reference_points_rebatch_zeros[i], memory_config=ttnn.L1_MEMORY_CONFIG)
+            reference_points_rebatch = ttnn.clone(
+                self.reference_points_rebatch_zeros[i], memory_config=ttnn.L1_MEMORY_CONFIG
+            )
             _, indices = ttnn.bos_nonzero(
                 ttnn.to_layout(bev_mask_sums[i], ttnn.ROW_MAJOR_LAYOUT),
                 max_length=self.max_len[i],
             )
             reference_points_rebatch = ttnn.operations.moreh.getitem(
-                reference_points_cam[i], [indices], [0], 
-                memory_config=ttnn.L1_MEMORY_CONFIG
+                reference_points_cam[i], [indices], [0], memory_config=ttnn.L1_MEMORY_CONFIG
             )
             indexes.append(indices)
 
             reference_points_rebatch = ttnn.multiply_(reference_points_rebatch, self.ref_3d_denormalizer[i])
             reference_points_rebatch = ttnn.sub_(reference_points_rebatch, 0.5)
             reference_points_rebatch = ttnn.repeat(
-                reference_points_rebatch, (1, 1, 16),
-                memory_config=ttnn.L1_MEMORY_CONFIG
+                reference_points_rebatch, (1, 1, 16), memory_config=ttnn.L1_MEMORY_CONFIG
             )
             reference_points_rebatch_lst.append(reference_points_rebatch)
 
@@ -285,22 +273,24 @@ class BEVFormerEncoder(TransformerLayerSequence):
         for idx, tensors in groups.items():
             if len(tensors) > 0:
                 concat_tensor = ttnn.concat(tensors, dim=0)
+                # TODO: is this necessary?
                 concat_tensor = ttnn.reallocate(concat_tensor)
                 [ttnn.deallocate(tensor) for tensor in tensors]
                 for id in idx:
                     ttnn.deallocate(reference_points_rebatch_lst[id])
                     reference_points_rebatch_lst[id] = concat_tensor
 
+        # NOTE: move to DRAM to save L1 memory
+        # TODO: But is this necessary?
         reference_points_rebatch_lst[0] = ttnn.to_memory_config(
-            reference_points_rebatch_lst[0],
-            ttnn.DRAM_MEMORY_CONFIG
+            reference_points_rebatch_lst[0], ttnn.DRAM_MEMORY_CONFIG
         )
         reference_points_rebatch_lst[3] = ttnn.to_memory_config(
-            reference_points_rebatch_lst[3],
-            ttnn.DRAM_MEMORY_CONFIG
+            reference_points_rebatch_lst[3], ttnn.DRAM_MEMORY_CONFIG
         )
         indexes[3] = ttnn.reallocate(indexes[3])
         ttnn.deallocate(reference_points_cam)
+        ttnn.deallocate(bev_mask)
 
         count = ttnn.gt(bev_mask_sums, 0.0)
         ttnn.deallocate(bev_mask_sums)
@@ -313,10 +303,9 @@ class BEVFormerEncoder(TransformerLayerSequence):
         groups = [[0], [1, 2], [3], [4, 5]]
         value_spatial = [value[group[0] : group[-1] + 1] for group in groups]
         ttnn.deallocate(value)
-        bilinear_weight_hash = ttnn.clone(
-            self.bilinear_weight_hash, 
-            memory_config=ttnn.L1_MEMORY_CONFIG
-        )
+
+        # NOTE: move to L1 to speed up processing, free it after use
+        bilinear_weight_hash = ttnn.clone(self.bilinear_weight_hash, memory_config=ttnn.L1_MEMORY_CONFIG)
 
         for lid, layer in enumerate(self.layers):
             output = layer(
@@ -411,7 +400,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         attn_masks=None,
         query_key_padding_mask=None,
         key_padding_mask=None,
-        padding_attn_mask=None,
         ref_2d=None,
         ref_3d=None,
         reference_points_cam=None,
@@ -461,7 +449,6 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     bilinear_weight_hash=bilinear_weight_hash,
                     memory_config=memory_config["self_attn"],
                     program_config=program_config["self_attn"],
-                    padding_attn_mask=padding_attn_mask,
                     **kwargs,
                 )
                 attn_index += 1
@@ -508,6 +495,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     program_config=program_config["ffn"],
                 )
                 ffn_index += 1
+
             if os.environ.get("TT_METAL_DEVICE_PROFILER") == "1":
                 ttnn.ReadDeviceProfiler(device_box.get())
         BEVFormerLayer.counter += 1
