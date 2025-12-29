@@ -1,4 +1,3 @@
-import os
 from test.SSR.tt.utils.misc import setup_l1_sharded_config
 from typing import Optional, Type, Union
 

@@ -1,5 +1,4 @@
 from typing import Optional, Type, Union
-from tt.projects.mmdet3d_plugin.SSR.utils.misc import setup_l1_sharded_config
 
 import torch
 from bos_metal import ttnn
@@ -8,8 +7,7 @@ from bos_metal.operations import Clone, Functional, Sequential
 from bos_metal.operations.conv import Conv2d
 from bos_metal.operations.pool import MaxPool2d, Pool2dConfig
 from mmdet.models.builder import BACKBONES
-
-L1_ALIGNMENT = 16
+from tt.projects.mmdet3d_plugin.SSR.utils.misc import setup_l1_sharded_config
 
 
 class TTBasicBlock(BaseModule):
@@ -97,7 +95,7 @@ class Add(BaseModule):
 
 
 def conv3x3_tt(
-    in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, activation=""
+    in_planes: int, out_planes: int, stride: int = 1, groups: int = 1, dilation: int = 1, activation=None
 ) -> Conv2d:
     """3x3 convolution with padding"""
     return Conv2d(
@@ -113,7 +111,7 @@ def conv3x3_tt(
     )
 
 
-def conv1x1_tt(in_planes: int, out_planes: int, stride: int = 1, activation="") -> Conv2d:
+def conv1x1_tt(in_planes: int, out_planes: int, stride: int = 1, activation=None) -> Conv2d:
     """1x1 convolution"""
     return Conv2d(
         in_planes,
@@ -145,9 +143,11 @@ class TTBottleneck(BaseModule):
         super().__init__()
         self.stride = stride
         width = int(planes * (base_width / 64.0)) * groups
-        self.conv1 = conv1x1_tt(inplanes, width, activation="relu")
-        self.conv2 = conv3x3_tt(width, width, stride, groups, dilation, activation="relu")
-        self.conv3 = conv1x1_tt(width, planes * self.expansion, activation="")
+        self.conv1 = conv1x1_tt(inplanes, width, activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU))
+        self.conv2 = conv3x3_tt(
+            width, width, stride, groups, dilation, activation=ttnn.UnaryWithParam(ttnn.UnaryOpType.RELU)
+        )
+        self.conv3 = conv1x1_tt(width, planes * self.expansion, activation=None)
         self.downsample = downsample
         self.relu = Functional(ttnn.relu)  # type: ignore
         self.add = Add()
@@ -216,7 +216,7 @@ class ResLayer(Sequential):
                         kernel_size=1,
                         stride=conv_stride,
                         bias=True,
-                        activation="",
+                        activation=None,
                     ),
                 ]
             )
