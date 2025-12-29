@@ -23,14 +23,14 @@ import copy
 import logging
 
 import torch.nn as nn
-import ttnn
-from tt.projects.configs.resnet50 import module_config as resnet_config
-from tt.projects.configs.fpn import module_config as fpn_config
+from bos_metal import device_box
+from bos_metal.operations import MyDict
 from mmdet.models import DETECTORS
-from tt.projects.configs.ops_config import MyDict
+from tt.projects.configs.fpn import module_config as fpn_config
+from tt.projects.configs.resnet50 import module_config as resnet_config
 from tt.projects.mmdet3d_plugin.SSR.utils import builder
 
-from bos_metal import device_box
+import ttnn
 
 logger = logging.getLogger(__name__)
 
@@ -137,7 +137,6 @@ class SSR(nn.Module):
             ttnn.sharded_to_interleaved(img_feats, memory_config=ttnn.L1_MEMORY_CONFIG),
             (1, 6, 12 * 20, 256),
         )
-        img_feats = ttnn.to_memory_config(img_feats, memory_config=ttnn.DRAM_MEMORY_CONFIG)
 
         outs = self.pts_bbox_head(
             mlvl_feats=img_feats,
@@ -163,7 +162,9 @@ class SSR(nn.Module):
         if self.prev_frame_info["prev_bev"] is None:
             self.prev_frame_info["prev_bev"] = ttnn.clone(outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG)
         else:
-            self.prev_frame_info["prev_bev"] = ttnn.identity(outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG, output_tensor=self.prev_frame_info["prev_bev"])
+            self.prev_frame_info["prev_bev"] = ttnn.identity(
+                outs["bev_embed"], memory_config=ttnn.DRAM_MEMORY_CONFIG, output_tensor=self.prev_frame_info["prev_bev"]
+            )
         # memory_config=self.prev_frame_info["prev_bev"].memory_config() if self.prev_frame_info["prev_bev"] else new_prev_bev.memory_config(),
         self.prev_frame_info["prev_angle"] = tmp_angle
 

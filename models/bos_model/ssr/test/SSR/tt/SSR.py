@@ -21,22 +21,16 @@
 
 import copy
 import logging
-import time
-import warnings
+from test.builder import build_backbone, build_head, build_neck
 
-import torch
 import torch.nn as nn
-import ttnn
-from tt.projects.configs.resnet50 import module_config as resnet_config
-from tt.projects.configs.fpn import module_config as fpn_config
-from mmcv.runner import auto_fp16
-from mmdet.models import DETECTORS
-from test.configs.op_configs import MyDict
-from test.builder import build_head, build_neck, build_backbone
-
 from bos_metal import device_box
+from bos_metal.operations import MyDict
+from mmdet.models import DETECTORS
+from tt.projects.configs.fpn import module_config as fpn_config
+from tt.projects.configs.resnet50 import module_config as resnet_config
 
-from test.utils import pt2tt
+import ttnn
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +44,6 @@ class SSR(nn.Module):
         img_backbone=None,
         img_neck=None,
         pts_bbox_head=None,
-        latent_world_model=None,
         train_cfg=None,
         test_cfg=None,
         video_test_mode=False,
@@ -108,10 +101,8 @@ class SSR(nn.Module):
         img_metas,
         img=None,
         ego_his_trajs=None,
-        ego_fut_trajs=None,
         ego_fut_cmd=None,
         ego_lcf_feat=None,
-        gt_attr_labels=None,
         memory_config=MyDict(),
         program_config=MyDict(),
         **kwargs,
@@ -124,16 +115,11 @@ class SSR(nn.Module):
         #     img_metas[0][0]["can_bus"][-1] = 0
         #     img_metas[0][0]["can_bus"][:3] = 0
 
-        # ttnn.synchronize_device(device_box.get())
-        img_backbone_st = time.time()
         img_feats = self.extract_feat(img=img[0])
         img_feats = ttnn.reshape(
             ttnn.sharded_to_interleaved(img_feats, memory_config=ttnn.L1_MEMORY_CONFIG),
             (1, 6, 12 * 20, 256),
         )
-        img_feats = ttnn.to_memory_config(img_feats, ttnn.DRAM_MEMORY_CONFIG)
-        # ttnn.synchronize_device(device_box.get())
-        logger.info(f"Img backbone time: {time.time() - img_backbone_st:.4f}s")
 
         outs = self.pts_bbox_head(
             mlvl_feats=img_feats,
@@ -146,5 +132,3 @@ class SSR(nn.Module):
         )
 
         return outs
-
-
