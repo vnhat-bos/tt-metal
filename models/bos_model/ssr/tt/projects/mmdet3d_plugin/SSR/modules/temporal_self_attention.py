@@ -1,11 +1,11 @@
-import ttnn
-
 import tracy
 from bos_metal import op
 from mmcv.cnn.bricks.registry import ATTENTION
+from tt.projects.configs.ops_config import MyDict
+
+import ttnn
 
 from ..utils.misc import masked_fill
-from tt.projects.configs.ops_config import MyDict
 
 
 @ATTENTION.register_module(name="TemporalSelfAttention_tt", force=True)
@@ -76,6 +76,7 @@ class TemporalSelfAttention(op.BaseModule):
         reference_points=None,
         spatial_shapes=None,
         bilinear_weight_hash=None,
+        use_prev_bev=True,
         memory_config=MyDict(),
         program_config=MyDict(),
         **kwargs,
@@ -84,6 +85,7 @@ class TemporalSelfAttention(op.BaseModule):
         if value is None:
             assert self.batch_first, "batch_first should be True if value is None"
             value = ttnn.concat([tmp, tmp], 0, memory_config=ttnn.L1_MEMORY_CONFIG)
+            use_prev_bev = False
 
         if identity is None:
             identity = query
@@ -93,18 +95,23 @@ class TemporalSelfAttention(op.BaseModule):
         bs, num_query, embed_dims = query.shape
         _, num_value, _ = value.shape
 
-        query = ttnn.concat([value[:bs], query_], -1)
+        query = ttnn.concat([value[:bs], query_], -1, memory_config=memory_config["query"].value)
         ttnn.deallocate(query_)
 
         # value = ttnn.reallocate(value)
         # NOTE: Using `ttnn.reallocate` here causes a pcc drop
         # TODO: Investigate why
-        value = ttnn.to_memory_config(value, ttnn.DRAM_MEMORY_CONFIG)
-        value = ttnn.to_memory_config(value, memory_config["value"].value)
-        value = ttnn.reallocate(value)
+        # value = ttnn.to_memory_config(value, ttnn.DRAM_MEMORY_CONFIG)
+        # value = ttnn.to_memory_config(value, memory_config["value"].value)
+        value = (
+            ttnn.to_memory_config(value, memory_config["value"].value)
+            if use_prev_bev
+            else ttnn.reallocate(value, memory_config=memory_config["value"].value)
+        )
         value_proj = self.value_proj(
             value,
             dtype=ttnn.bfloat8_b,
+            # dtype=ttnn.bfloat16,
             memory_config=memory_config["value_proj"].value,
             program_config=program_config["value_proj"].value,
         )
@@ -112,10 +119,15 @@ class TemporalSelfAttention(op.BaseModule):
         if key_padding_mask is not None:
             value_proj = masked_fill(value_proj, key_padding_mask[..., None], 0.0)
         value = ttnn.to_layout(value_proj, ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG)
+        ttnn.deallocate(value_proj)
         value = ttnn.reshape(value, (bs * self.num_bev_queue, num_value, self.num_heads, -1))
-        value = ttnn.reallocate(value)
 
-        attention_weights = self.attention_weights(query)
+        attention_weights = self.attention_weights(
+            query,
+            dtype=ttnn.bfloat16,
+            memory_config=ttnn.L1_MEMORY_CONFIG,
+            program_config=program_config["attention_weights"].value,
+        )
         attention_weights = ttnn.reshape(
             attention_weights, (num_query * self.num_heads * self.num_bev_queue, self.num_levels * self.num_points)
         )
@@ -124,7 +136,13 @@ class TemporalSelfAttention(op.BaseModule):
             attention_weights, (num_query * self.num_heads, self.num_bev_queue * self.num_levels * self.num_points)
         )
 
-        sampling_offsets = self.sampling_offsets(query)
+        # NOTE: Fix memory config to L1 interleaved to prepare for `ttnn.reshape`
+        sampling_offsets = self.sampling_offsets(
+            query,
+            dtype=ttnn.bfloat16,
+            memory_config=ttnn.L1_MEMORY_CONFIG,
+            program_config=program_config["sampling_offsets"].value,
+        )
         sampling_locations = ttnn.add_(sampling_offsets, reference_points)
         sampling_locations = ttnn.reshape(
             sampling_locations, (num_query * self.num_heads, self.num_bev_queue * self.num_levels * self.num_points * 2)
@@ -143,7 +161,7 @@ class TemporalSelfAttention(op.BaseModule):
             num_queries=num_query,
             num_levels=self.num_levels,
             num_points=self.num_points,
-            is_QHB=True
+            is_QHB=True,
         )
         ttnn.deallocate(value)
 
@@ -151,7 +169,7 @@ class TemporalSelfAttention(op.BaseModule):
         output = ttnn.to_memory_config(output, identity.memory_config())
         output = self.output_proj(
             output,
-            memory_config=memory_config["output_proj"].value,
+            memory_config=identity.memory_config(),
             program_config=program_config["output_proj"].value,
         )
         if not self.batch_first:
