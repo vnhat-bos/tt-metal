@@ -1,20 +1,15 @@
 import tracy
-
-import torch
-import ttnn
+from bos_metal import device_box, op
+from bos_metal.operations import MyDict
 from mmcv.cnn.bricks.registry import ATTENTION
 from mmcv.cnn.bricks.transformer import build_attention
 from mmcv.runner.base_module import BaseModule
 
-from bos_metal import device_box, op
-
-from ..utils.misc import masked_fill, pt2tt
-from tt.projects.configs.ops_config import MyDict
+import ttnn
 
 
 @ATTENTION.register_module(name="SpatialCrossAttention_tt")
 class SpatialCrossAttention(op.BaseModule):
-    count = 0
     """An attention module used in BEVFormer.
     Args:
         embed_dims (int): The embedding dimension of Attention.
@@ -47,8 +42,6 @@ class SpatialCrossAttention(op.BaseModule):
         self.output_proj = op.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
         self.max_len = [3_072, 1_344, 1_376, 3_680, 928, 992]
-        self.slots_ = ttnn.zeros((1, 10000, embed_dims), dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG, device=device_box.get())
-
 
     def forward(
         self,
@@ -64,6 +57,7 @@ class SpatialCrossAttention(op.BaseModule):
         bilinear_weight_hash=None,
         memory_config=MyDict(),
         program_config=MyDict(),
+        initial_slots=None,
         **kwargs,
     ):
 
@@ -87,7 +81,9 @@ class SpatialCrossAttention(op.BaseModule):
         for group_idx, group in enumerate(groups):
             i = group[0]
             if len(group) == 1:
-                q_group = ttnn.to_layout(ttnn.bos_getitem(query, [indexes[i]], [1]), ttnn.TILE_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG)
+                q_group = ttnn.to_layout(
+                    ttnn.bos_getitem(query, [indexes[i]], [1]), ttnn.TILE_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG
+                )
             else:
                 tmp = [ttnn.to_layout(ttnn.bos_getitem(query, [indexes[j]], [1]), ttnn.TILE_LAYOUT) for j in group]
                 q_group = ttnn.concat(tmp, dim=0, memory_config=ttnn.L1_MEMORY_CONFIG)
@@ -99,38 +95,35 @@ class SpatialCrossAttention(op.BaseModule):
                 value=value[group_idx],
                 reference_points=ref,
                 spatial_shapes=spatial_shapes,
-                bilinear_weight_hash=bilinear_weight_hash
+                bilinear_weight_hash=bilinear_weight_hash,
             )
             queries.append(out)
         ttnn.deallocate(query)
-        
-        slots = ttnn.clone(self.slots_, memory_config=ttnn.L1_MEMORY_CONFIG)
+
+        slots = ttnn.clone(initial_slots, memory_config=ttnn.L1_MEMORY_CONFIG)
         for group_idx, group in enumerate(groups):
             q = queries[group_idx]
             for i in group:
                 if len(group) > 1:
-                    q_i = q[group.index(i):group.index(i)+1]
+                    q_i = q[group.index(i) : group.index(i) + 1]
                 else:
                     q_i = q
                 tmp = ttnn.bos_getitem(slots, [indexes[i]], [1])
                 tmp = ttnn.to_layout(tmp, ttnn.TILE_LAYOUT)
                 tmp = ttnn.add_(tmp, q_i)
+                ttnn.deallocate(q_i)
                 tmp = ttnn.to_layout(tmp, ttnn.ROW_MAJOR_LAYOUT)
                 slots[:, indexes[i]] = tmp
-                ttnn.deallocate(tmp)
-            ttnn.deallocate(q_i)
+            ttnn.deallocate(tmp)
             ttnn.deallocate(q)
 
         slots = ttnn.div(slots, count)
         slots = ttnn.to_layout(slots, ttnn.TILE_LAYOUT)
         slots = ttnn.to_memory_config(slots, inp_residual.memory_config())
         slots = self.output_proj(
-            slots, 
-            memory_config=memory_config["output_proj"].value,
-            program_config=program_config["output_proj"].value
+            slots, memory_config=memory_config["output_proj"].value, program_config=program_config["output_proj"].value
         )
 
-        SpatialCrossAttention.count += 1
         return ttnn.add_(inp_residual, slots)
 
 
@@ -228,7 +221,9 @@ class MSDeformableAttention3D_tt(BaseModule):
         ttnn.deallocate(query)
         sampling_offsets_ = ttnn.add_(sampling_offsets, reference_points)
         sampling_locations = ttnn.reshape(
-            sampling_offsets_, (bs * num_query * self.num_heads, self.num_levels * self.num_points * 2), memory_config=ttnn.L1_MEMORY_CONFIG
+            sampling_offsets_,
+            (bs * num_query * self.num_heads, self.num_levels * self.num_points * 2),
+            memory_config=ttnn.L1_MEMORY_CONFIG,
         )
         ttnn.deallocate(sampling_offsets_)
 
@@ -240,7 +235,7 @@ class MSDeformableAttention3D_tt(BaseModule):
             value = masked_fill(value, key_padding_mask[..., None], 0.0)
         value = ttnn.to_layout(value, ttnn.ROW_MAJOR_LAYOUT)
         value = ttnn.reshape(value, (bs, num_value, self.num_heads, -1))
-        
+
         output = ttnn.bos_ssr_deformable_attention(
             value,
             spatial_shapes,
@@ -253,7 +248,7 @@ class MSDeformableAttention3D_tt(BaseModule):
             num_queries=num_query,
             num_levels=self.num_levels,
             num_points=self.num_points,
-            is_QHB=False
+            is_QHB=False,
         )
         ttnn.deallocate(value)
         ttnn.deallocate(attention_weights)

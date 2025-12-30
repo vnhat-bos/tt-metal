@@ -1,17 +1,15 @@
 import tracy
+from bos_metal import device_box, op
+from bos_metal.operations import MyDict
 from mmcv.cnn.bricks.registry import ATTENTION
 from mmcv.cnn.bricks.transformer import build_attention
-
-from bos_metal import op, device_box
-import ttnn
 from test.SSR.tt.ms_deformable_attention_3d import MSDeformableAttention3D_tt
 
-from tt.projects.configs.ops_config import MyDict
+import ttnn
 
 
 @ATTENTION.register_module(name="SpatialCrossAttention_tt")
 class SpatialCrossAttention(op.BaseModule):
-    counter = 0
     """An attention module used in BEVFormer.
     Args:
         embed_dims (int): The embedding dimension of Attention.
@@ -30,7 +28,6 @@ class SpatialCrossAttention(op.BaseModule):
         init_cfg=None,
         batch_first=False,
         deformable_attention=dict(type="MSDeformableAttention3D", embed_dims=256, num_levels=4),
-        max_len=3_680,
         **kwargs,
     ):
         super(SpatialCrossAttention, self).__init__()
@@ -45,7 +42,6 @@ class SpatialCrossAttention(op.BaseModule):
         self.output_proj = op.Linear(embed_dims, embed_dims)
         self.batch_first = batch_first
         self.max_len = [3_072, 1_344, 1_376, 3_680, 928, 992]
-        self.slots_ = ttnn.zeros((1, 10_752, embed_dims), dtype=ttnn.bfloat16, layout=ttnn.ROW_MAJOR_LAYOUT, memory_config=ttnn.DRAM_MEMORY_CONFIG, device=device_box.get())
 
     def forward(
         self,
@@ -61,9 +57,10 @@ class SpatialCrossAttention(op.BaseModule):
         bilinear_weight_hash=None,
         memory_config=MyDict(),
         program_config=MyDict(),
+        initial_slots=None,
         **kwargs,
     ):
-        # tracy.signpost("SpatialCrossAttention")
+
         if key is None:
             key = query
         if value is None:
@@ -78,14 +75,15 @@ class SpatialCrossAttention(op.BaseModule):
         query = ttnn.to_layout(query, layout=ttnn.ROW_MAJOR_LAYOUT)
         query = ttnn.reallocate(query)
 
-        # get queries for each image 
         groups = [[0], [1, 2], [3], [4, 5]]
         queries = []
 
         for group_idx, group in enumerate(groups):
             i = group[0]
             if len(group) == 1:
-                q_group = ttnn.to_layout(ttnn.bos_getitem(query, [indexes[i]], [1]), ttnn.TILE_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG)
+                q_group = ttnn.to_layout(
+                    ttnn.bos_getitem(query, [indexes[i]], [1]), ttnn.TILE_LAYOUT, memory_config=ttnn.L1_MEMORY_CONFIG
+                )
             else:
                 tmp = [ttnn.to_layout(ttnn.bos_getitem(query, [indexes[j]], [1]), ttnn.TILE_LAYOUT) for j in group]
                 q_group = ttnn.concat(tmp, dim=0, memory_config=ttnn.L1_MEMORY_CONFIG)
@@ -97,17 +95,17 @@ class SpatialCrossAttention(op.BaseModule):
                 value=value[group_idx],
                 reference_points=ref,
                 spatial_shapes=spatial_shapes,
-                bilinear_weight_hash=bilinear_weight_hash
+                bilinear_weight_hash=bilinear_weight_hash,
             )
             queries.append(out)
         ttnn.deallocate(query)
 
-        slots = ttnn.clone(self.slots_, memory_config=ttnn.L1_MEMORY_CONFIG)
+        slots = ttnn.clone(initial_slots, memory_config=ttnn.L1_MEMORY_CONFIG)
         for group_idx, group in enumerate(groups):
             q = queries[group_idx]
             for i in group:
                 if len(group) > 1:
-                    q_i = q[group.index(i):group.index(i)+1]
+                    q_i = q[group.index(i) : group.index(i) + 1]
                 else:
                     q_i = q
                 tmp = ttnn.bos_getitem(slots, [indexes[i]], [1])
@@ -123,10 +121,7 @@ class SpatialCrossAttention(op.BaseModule):
         slots = ttnn.to_layout(slots, ttnn.TILE_LAYOUT)
         slots = ttnn.to_memory_config(slots, inp_residual.memory_config())
         slots = self.output_proj(
-            slots, 
-            memory_config=memory_config["output_proj"].value,
-            program_config=program_config["output_proj"].value
+            slots, memory_config=memory_config["output_proj"].value, program_config=program_config["output_proj"].value
         )
 
-        SpatialCrossAttention.counter += 1
         return ttnn.add_(inp_residual, slots)

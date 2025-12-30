@@ -68,6 +68,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
         )
         self.bilinear_weight_hash = ttnn.bos_create_bilinear_hash(device_box.get(), **weight_hash_config_case)
 
+        # Pre-tilize spatial shapes
         self.temporal_spatial_shapes = pt2tt(
             torch.full((32, 32), 100.0),
             layout=ttnn.TILE_LAYOUT,
@@ -79,6 +80,15 @@ class BEVFormerEncoder(TransformerLayerSequence):
             layout=ttnn.TILE_LAYOUT,
             device=device_box.get(),
             memory_config=ttnn.L1_MEMORY_CONFIG,
+        )
+
+        # Slots for spatial cross attention
+        self.slots = ttnn.zeros(
+            (1, 10_752, 256),
+            dtype=ttnn.bfloat16,
+            layout=ttnn.ROW_MAJOR_LAYOUT,
+            memory_config=ttnn.DRAM_MEMORY_CONFIG,
+            device=device_box.get(),
         )
 
     @staticmethod
@@ -304,6 +314,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         # NOTE: move to L1 to speed up processing, free it after use
         bilinear_weight_hash = ttnn.clone(self.bilinear_weight_hash, memory_config=ttnn.L1_MEMORY_CONFIG)
+        # initial_slots = ttnn.to_memory_config(self.slots, ttnn.L1_MEMORY_CONFIG)
+        initial_slots = self.slots
 
         for lid, layer in enumerate(self.layers):
             output = layer(
@@ -317,6 +329,7 @@ class BEVFormerEncoder(TransformerLayerSequence):
                 bev_w=bev_w,
                 temporal_spatial_shapes=self.temporal_spatial_shapes,
                 spatial_spatial_shapes=self.spatial_spatial_shapes,
+                initial_slots=initial_slots,
                 level_start_index=level_start_index,
                 reference_points_rebatch=reference_points_rebatch_lst,
                 bev_mask=bev_mask,
@@ -405,6 +418,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
         mask=None,
         temporal_spatial_shapes=None,
         spatial_spatial_shapes=None,
+        initial_slots=None,
         prev_bev=None,
         bilinear_weight_hash=None,
         memory_config=MyDict(),
@@ -478,6 +492,7 @@ class BEVFormerLayer(MyCustomBaseTransformerLayer):
                     indexes=indexes,
                     count=count,
                     bilinear_weight_hash=bilinear_weight_hash,
+                    initial_slots=initial_slots,
                     memory_config=memory_config["cross_attn"],
                     program_config=program_config["cross_attn"],
                     **kwargs,
