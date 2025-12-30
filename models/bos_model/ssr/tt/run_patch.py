@@ -247,11 +247,11 @@ def run_test(torch_model, ttnn_model, cfg, patch_data, device, pcc_threshold=0.9
                 
                 tt_fut_preds = torch_result[0]['pts_bbox']['ego_fut_preds']
                 pt_fut_preds = tt_result[0]['pts_bbox']['ego_fut_preds']
-                print(f"Patch data {i}")
+                logger.info(f"Patch data {i}")
                 passed, msg = op.compare_tensors(pt_fut_preds, tt_fut_preds, pcc=pcc_threshold)
 
     except (KeyboardInterrupt, SystemExit):
-        print("KeyboardInterrupt or SystemExit detected, exiting...")
+        logger.warning("KeyboardInterrupt or SystemExit detected, exiting...")
 
     return tt_results, torch_results
 

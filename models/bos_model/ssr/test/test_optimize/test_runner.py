@@ -215,7 +215,7 @@ def device():
     if DOUBLE_CQ:
         device_dict["num_command_queues"] = 2
     dev = device_box.open(device_dict, enable_program_cache=True)
-    ttnn.device.EnablePersistentKernelCache()
+    # ttnn.device.EnablePersistentKernelCache()
     yield dev
 
 

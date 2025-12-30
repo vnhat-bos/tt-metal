@@ -192,7 +192,6 @@ def load_model_config(args):
     if args.tt_config:
         ttnn_cfg = Config.fromfile(args.tt_config)
         cfg.tt_model = ttnn_cfg
-        ttnn_cfg = Config.fromfile(args.tt_config)
     
     # Common and custom options
     if args.common_config is not None:

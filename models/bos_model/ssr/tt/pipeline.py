@@ -38,29 +38,19 @@ def build_models_from_cfg(cfg, checkpoint_path=None, fuse_bn=False):
     """Construct torch and ttnn models and load checkpoint."""
     ttnn_model = build_model(cfg.tt_model, test_cfg=cfg.get("test_cfg"))
 
-    if checkpoint_path is not None and False:
-        checkpoint = load_checkpoint(ttnn_model, checkpoint_path, map_location="cpu")
-
-        if "CLASSES" in checkpoint.get("meta", {}):
-            classes = checkpoint["meta"]["CLASSES"]
-            ttnn_model.CLASSES = classes
-        if "PALETTE" in checkpoint.get("meta", {}):
-            palette = checkpoint["meta"]["PALETTE"]
-            ttnn_model.PALETTE = palette
-    else:
-        classes = [
-            "car",
-            "truck",
-            "construction_vehicle",
-            "bus",
-            "trailer",
-            "barrier",
-            "motorcycle",
-            "bicycle",
-            "pedestrian",
-            "traffic_cone",
-        ]
-        ttnn_model.CLASSES = classes
+    classes = [
+        "car",
+        "truck",
+        "construction_vehicle",
+        "bus",
+        "trailer",
+        "barrier",
+        "motorcycle",
+        "bicycle",
+        "pedestrian",
+        "traffic_cone",
+    ]
+    ttnn_model.CLASSES = classes
 
     return ttnn_model
 

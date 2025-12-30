@@ -89,6 +89,7 @@ def single_gpu_test(model,
             for _ in range(batch_size):
                 prog_bar.update()
     except KeyboardInterrupt:
+        
         print('Keyboard interrupt, exiting...')
         
     # [(100, 100), ...] per camera frequency counts captured during encoder forward
