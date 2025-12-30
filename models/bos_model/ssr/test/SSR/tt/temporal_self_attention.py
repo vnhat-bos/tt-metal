@@ -122,26 +122,27 @@ class TemporalSelfAttention(op.BaseModule):
         ttnn.deallocate(value_proj)
         value = ttnn.reshape(value, (bs * self.num_bev_queue, num_value, self.num_heads, -1))
 
-        attention_weights = self.attention_weights(
-            query,
-            dtype=ttnn.bfloat16,
-            memory_config=ttnn.L1_MEMORY_CONFIG,
-            program_config=program_config["attention_weights"].value,
-        )
-        attention_weights = ttnn.reshape(
-            attention_weights, (num_query * self.num_heads * self.num_bev_queue, self.num_levels * self.num_points)
-        )
-        attention_weights = ttnn.softmax(attention_weights, -1)
-        attention_weights = ttnn.reshape(
-            attention_weights, (num_query * self.num_heads, self.num_bev_queue * self.num_levels * self.num_points)
-        )
-
         # NOTE: Fix memory config to L1 interleaved to prepare for `ttnn.reshape`
         sampling_offsets = self.sampling_offsets(
             query,
             dtype=ttnn.bfloat16,
             memory_config=ttnn.L1_MEMORY_CONFIG,
             program_config=program_config["sampling_offsets"].value,
+        )
+        attention_weights = self.attention_weights(
+            query,
+            dtype=ttnn.bfloat16,
+            memory_config=ttnn.L1_MEMORY_CONFIG,
+            program_config=program_config["attention_weights"].value,
+        )
+        ttnn.deallocate(query)
+
+        attention_weights = ttnn.reshape(
+            attention_weights, (num_query * self.num_heads * self.num_bev_queue, self.num_levels * self.num_points)
+        )
+        attention_weights = ttnn.softmax(attention_weights, -1)
+        attention_weights = ttnn.reshape(
+            attention_weights, (num_query * self.num_heads, self.num_bev_queue * self.num_levels * self.num_points)
         )
         sampling_locations = ttnn.add_(sampling_offsets, reference_points)
         sampling_locations = ttnn.reshape(

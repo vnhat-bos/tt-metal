@@ -316,8 +316,8 @@ class BEVFormerEncoder(TransformerLayerSequence):
 
         # NOTE: move to L1 to speed up processing, free it after use
         bilinear_weight_hash = ttnn.clone(self.bilinear_weight_hash, memory_config=ttnn.L1_MEMORY_CONFIG)
-        # initial_slots = ttnn.to_memory_config(self.slots, ttnn.L1_MEMORY_CONFIG)
-        initial_slots = self.slots
+        initial_slots = ttnn.to_memory_config(self.slots, ttnn.L1_MEMORY_CONFIG)
+        # initial_slots = self.slots
 
         for lid, layer in enumerate(self.layers):
             output = layer(
